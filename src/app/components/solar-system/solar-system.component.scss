@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  --cyan: #79e7ec;
+  --muted: #829b9e;
+  --line: #79e7ec30;
+  color: #e2eeed;
+  font-family: 'Bahnschrift', 'Trebuchet MS', sans-serif;
+  letter-spacing: 0;
+}
+
+* { box-sizing: border-box; }
+button { font: inherit; }
+.game-wrapper { position: relative; height: 100dvh; min-height: 640px; overflow: hidden; background: #060c0e; }
+.canvas-container { position: absolute; inset: 0; }
+.map-header, .map-footer { position: absolute; z-index: 1; left: 32px; right: 32px; display: flex; justify-content: space-between; gap: 16px; pointer-events: none; }
+.map-header { top: 28px; align-items: center; }
+.eyebrow, .connection, .map-footer, .target-code { font-family: 'Consolas', monospace; font-size: 10px; line-height: 1.6; }
+.eyebrow { color: var(--muted); }
+h1 { margin: 6px 0 0; font-size: 24px; font-weight: 400; }
+.connection { color: #9ab5ad; }
+i, .target-dot { display: inline-block; width: 5px; height: 5px; margin-right: 8px; background: #9cdda8; border-radius: 50%; box-shadow: 0 0 9px #9cdda850; }
+.map-footer { bottom: 24px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); }
+.map-footer b { color: #dfb86e; font-weight: normal; }
+.planet-target { position: absolute; z-index: 1; left: 32px; top: 110px; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-left: 2px solid var(--cyan); border-radius: 2px; background: #0a171bd9; color: var(--cyan); cursor: pointer; font-size: 12px; }
+.target-dot { background: var(--cyan); margin: 0; }
+.target-code { color: var(--muted); margin-left: 12px; }
+.planet-picker { position: absolute; z-index: 1; left: 32px; top: 110px; display: flex; flex-direction: column; gap: 6px; }
+.planet-picker .planet-target { position: static; justify-content: space-between; }
+.planet-target[aria-pressed='true'] { border-color: #dfbd7f; color: #dfbd7f; }
+.render-error { position: absolute; top: 45%; left: 16px; right: 16px; text-align: center; color: #dfbd7f; }
+.planet-target:hover { background: #163033; }
+button:focus-visible { outline: 2px solid #f1c979; outline-offset: 4px; }
+.planet-panel { position: absolute; z-index: 2; top: 110px; right: 32px; width: 310px; max-width: calc(100% - 32px); }
+@media (max-width: 700px) {
+  .game-wrapper { min-height: 740px; }
+  .map-header, .map-footer { left: 16px; right: 16px; }
+  .map-header { top: 20px; }
+  h1 { font-size: 21px; }
+  .connection { max-width: 95px; font-size: 9px; text-align: right; }
+  .planet-target { left: 16px; top: 94px; }
+  .planet-picker { left: 16px; top: 94px; gap: 4px; }
+  .planet-picker .planet-target { min-height: 32px; padding: 6px 8px; font-size: 10px; }
+  .planet-panel { top: auto; bottom: 65px; right: 16px; width: 280px; }
+  .map-footer { font-size: 8px; bottom: 20px; }
+}

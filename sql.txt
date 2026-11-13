@@ -1,0 +1,54 @@
+-- 1. Игроки
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Планеты игрока
+CREATE TABLE planets (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    
+    -- Коэффициенты богатства планеты (например, 1.5 для богатой железом планеты)
+    metal_multiplier DOUBLE PRECISION DEFAULT 1.0,
+    crystal_multiplier DOUBLE PRECISION DEFAULT 1.0,
+    
+    -- Текущие запасы на момент last_updated_at
+    metal_amount DOUBLE PRECISION DEFAULT 500.0,
+    crystal_amount DOUBLE PRECISION DEFAULT 200.0,
+    
+    -- Базовая скорость добычи в час (пересчитывается при улучшении шахт)
+    metal_per_hour DOUBLE PRECISION DEFAULT 60.0,
+    crystal_per_hour DOUBLE PRECISION DEFAULT 30.0,
+    
+    -- Ключевое поле для ленивого расчета
+    last_updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Здания на ограниченной сетке планеты
+CREATE TABLE planet_buildings (
+    id BIGSERIAL PRIMARY KEY,
+    planet_id BIGINT REFERENCES planets(id) ON DELETE CASCADE,
+    grid_row INT NOT NULL,
+    grid_col INT NOT NULL,
+    building_type VARCHAR(30) NOT NULL, -- 'MINE', 'CRYSTAL_SYNTH', 'TURRET', 'SHIPYARD'
+    level INT DEFAULT 1,
+    
+    -- Если здание сейчас строится или улучшается, здесь хранится время окончания
+    upgrade_finish_at TIMESTAMP WITH TIME ZONE NULL,
+    
+    -- Запрещаем строить два здания в одной клетке
+    UNIQUE(planet_id, grid_row, grid_col)
+);
+
+-- 4. Очередь постройки кораблей (Верфь)
+CREATE TABLE ship_queue (
+    id BIGSERIAL PRIMARY KEY,
+    planet_id BIGINT REFERENCES planets(id) ON DELETE CASCADE,
+    ship_type VARCHAR(30) NOT NULL, -- 'FIGHTER', 'CRUISER'
+    quantity INT NOT NULL,
+    finish_at TIMESTAMP WITH TIME ZONE NOT NULL
+);

@@ -1,0 +1,24 @@
+<div class="game-wrapper">
+  <header class="map-header">
+    <div><span class="eyebrow">НАВИГАЦИОННЫЙ КОМПЛЕКС / 01</span><h1>Система Гелиос</h1></div>
+    <span class="connection"><i></i> СВЯЗЬ УСТАНОВЛЕНА</span>
+  </header>
+
+  <div #pixiContainer class="canvas-container" role="img" aria-label="Голографическая карта звезды Гелиос и трёх планет"></div>
+  <div class="planet-picker" aria-label="Планеты системы">
+    @for (planet of planets; track planet.name) {
+      <button class="planet-target" type="button" (click)="selectPlanet(planet)" [attr.aria-label]="'Выбрать планету ' + planet.name" [attr.aria-pressed]="selectedPlanet() === planet">
+        <span class="target-dot"></span> {{ planet.name }} <span class="target-code">0{{ $index + 1 }}</span>
+      </button>
+    }
+  </div>
+  @if (renderError()) {
+    <p class="render-error" role="alert">Не удалось загрузить карту. Перезагрузите страницу.</p>
+  }
+
+  @if (selectedPlanet(); as planet) {
+    <app-planet-panel class="planet-panel" [planet]="planet" (closed)="closePanel()" />
+  }
+
+  <footer class="map-footer"><span><i></i> ОРБИТАЛЬНАЯ ПРОЕКЦИЯ</span><span>ГЕЛИОС <b> / </b> СЕКТОР 001</span></footer>
+</div>

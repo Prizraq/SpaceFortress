@@ -1,0 +1,1288 @@
+Skip to main contentAccessibility help
+AI Mode
+All
+Images
+Videos
+News
+More
+Sign in
+
+
+
+which libraries is using for create 2d or 3d games in browser? May I use it in my angular or vue projects? It is free? please, speak with me in russian
+Для создания 2D и 3D игр в браузере используются специализированные JavaScript/TypeScript движки и библиотеки. Все популярные решения являются бесплатными и с открытым исходным кодом, и их можно легко интегрировать в проекты на Angular и Vue.
+Популярные библиотеки для 2D-игр
+Phaser. Это самый популярный 2D-фреймворк с огромным сообществом, встроенной физикой, анимациями и поддержкой звука. Он полностью бесплатен (лицензия MIT) и отлично подходит для классических аркад и платформеров.
+PixiJS. Это сверхбыстрый 2D-рендерер на базе WebGL, который идеально подходит для проектов с тяжелой графикой и спецэффектами. В отличие от Phaser, в нем нет встроенной физики или логики игр, но его очень легко встраивать как визуальный слой.
+Kaboom.js (или форк KAPLAY). Это простая и веселая библиотека для быстрого прототипирования 2D-игр. Она имеет минималистичный синтаксис и подходит для небольших проектов.
+Популярные библиотеки для 3D-игр
+Three.js. Это стандарт индустрии для 3D-графики в браузере (лицензия MIT). По сути, это библиотека рендеринга, поэтому для полноценной игры к ней часто подключают сторонние физические движки, например Cannon-es или Rapier.
+Babylon.js. Это полноценный 3D-игровой движок, разрабатываемый при поддержке Microsoft (лицензия Apache 2.0). Он включает в себя физику, продвинутое освещение, систему частиц и удобный визуальный инспектор прямо в браузере.
+PlayCanvas. Это мощный 3D-движок с открытым исходным кодом (лицензия MIT). Вы можете использовать сам движок бесплатно в своем коде, хотя его облачный визуальный редактор имеет платные тарифы для закрытых проектов.
+Интеграция в Angular и Vue
+Все перечисленные библиотеки работают через стандартный HTML-элемент <canvas>, поэтому они без проблем дружат с любыми современными фреймворками.
+Установка. Библиотеки устанавливаются как обычные пакеты через npm или yarn и имеют отличную поддержку TypeScript, что особенно важно для Angular.
+Жизненный цикл компонентов. Инициализировать игровой движок нужно после того, как компонент отрендерится в DOM (в ngAfterViewInit для Angular или в onMounted для Vue). При уничтожении компонента важно вызывать методы очистки памяти движка, чтобы избежать утечек.
+Оптимизация производительности. Игровой цикл обновляется 60 и более раз в секунду. В Angular рекомендуется запускать движок внутри NgZone.runOutsideAngular(), чтобы фреймворк не тратил ресурсы на проверку изменений при каждом кадре. В Vue не стоит оборачивать внутренние объекты самого движка в ref() или reactive(), чтобы не замедлять рендеринг из-за лишней реактивности.
+Стоимость и лицензии
+Все упомянутые библиотеки распространяются по свободным лицензиям (MIT или Apache 2.0). Это значит, что вы можете использовать их абсолютно бесплатно как для личных, так и для коммерческих проектов без каких-либо отчислений авторам.
+Чтобы подобрать оптимальный стек и дать готовый шаблон кода, уточните, пожалуйста:
+Какой жанр и размерность игры вы планируете (например, 2D-платформер или 3D-головоломка)?
+Какой фреймворк вы выбрали для проекта (Angular или Vue)?
+Нужна ли в игре сложная физика или мультиплеер?
+Я смогу подготовить для вас базовую структуру компонента с правильной инициализацией и очисткой памяти движка.
+
+
+
+
+I thinked about space strategy game, User may see planets of solar system, crate base in here. In base user may create and upgrade different buildings (map is limited), take resources, create spaceships. Different planets has different resources. Maybe, defense own bases from enimies
+Для космической стратегии с картой Солнечной системы, строительством баз и управлением флотом лучшим выбором станет комбинация Angular/Vue для интерфейса и Three.js (для 3D) или PixiJS (для 2D). Такой жанр состоит из множества меню, таблиц и окон улучшений, поэтому веб-фреймворк возьмет на себя весь интерфейс, а игровой движок будет отвечать только за отрисовку космоса и баз.
+Выбор движка под ваш жанр
+В стратегиях не нужна сложная физика столкновений, как в шутерах, но важна красивая картинка, работа со светом и удобное выделение объектов мышкой (Raycast).
+Если хотите 3D-космос: Three.js. Вы сможете сделать вращающиеся 3D-планеты с орбитами, вокруг которых летают корабли, а при клике на планету камера плавно приблизится к поверхности с сеткой для постройки базы. Three.js легче, чем Babylon.js, и идеально подходит для визуализации карт.
+Если хотите 2D-стиль (вид сверху или изометрия): PixiJS. Отлично подойдет, если вы представляете игру как тактическую карту (похожую на Stellaris или FTL). PixiJS легко отрисует тысячи звезд, лазерные лучи и спрайты зданий без потери кадров.
+Как правильно разделить архитектуру
+Главная ошибка новичков — пытаться рисовать кнопки, полоски здоровья и меню построек средствами самого игрового движка. В связке с Angular или Vue нужно делать иначе.
+Web-фреймворк (Angular / Vue) отвечает за UI и логику. Все окна (список ресурсов, меню строительства, дерево технологий, состав флота) верстаются обычным HTML и CSS поверх <canvas>. Состояние игры (сколько сейчас металла, какие здания построены) хранится в сервисах Angular или хранилище Pinia во Vue.
+Игровой движок отвечает только за визуал. Движок читает данные из вашего хранилища и просто рисует то, что там записано. Если игрок нажал HTML-кнопку «Построить шахту», состояние обновилось, и движок в следующем кадре добавил модельку шахты на карту.
+События кликов (Raycasting). Когда пользователь кликает по планете или кораблю на холсте, движок определяет, в какой объект попал курсор, и отправляет событие во фреймворк. В ответ Vue или Angular открывает боковую панель с информацией об этой планете.
+Рекомендации по геймплею и реализации
+Для описанных вами механик стоит заранее продумать три технических момента.
+Два режима камеры (Масштабирование). Сделайте два состояния сцены: «Карта системы» (видны Солнце, орбиты и планеты) и «Поверхность базы» (ограниченная сетка, например 10x10 клеток, для зданий и турелей). При переключении между ними можно просто скрывать одну группу объектов и показывать другую.
+Симуляция ресурсов по времени. Для стратегии не нужно пересчитывать добычу ресурсов 60 раз в секунду в цикле рендеринга. Достаточно завести обычный таймер (setInterval), который раз в секунду прибавляет ресурсы в зависимости от уровня шахт и проверяет, не пора ли врагам атаковать базу.
+Защита базы (Tower Defense). Для обороны проще всего задать вражеским кораблям заранее проложенные маршруты к центру базы, а турелям — радиус поражения. Проверка расстояния между турелью и врагом делается обычной математической формулой без подключения тяжелых физических движков.
+Чтобы мы могли перейти к практике и написать первый прототип, подскажите:
+Какой визуальный стиль вам ближе — объемное 3D (вращающиеся планеты) или стильное 2D (тактическая карта)?
+На каком фреймворке вам комфортнее писать код — Angular или Vue?
+Я смогу набросать для вас структуру хранения данных (состояния планет, ресурсов и зданий) и показать, как связать ее с отрисовкой.
+
+
+
+
+I think, 3d is too difficult
+Это абсолютно правильное и прагматичное решение. 2D-графика позволит вам сосредоточиться на самой сути стратегии — балансе ресурсов, строительстве и сражениях, вместо того чтобы тратить недели на настройку 3D-камер, освещения и поиск моделей.
+Для 2D-стратегии в браузере у вас есть два отличных пути реализации.
+Вариант 1: PixiJS (Рекомендуемый)
+Если в игре планируются красивые космические эффекты, лазерные лучи, взрывы, анимация турелей и плавное перетаскивание карты мышкой, выбирайте PixiJS.
+Производительность. Он работает через видеокарту (WebGL), поэтому легко отрисует сотни кораблей и снарядов одновременно без тормозов.
+Удобство работы. В PixiJS каждый объект (планета, здание, корабль) — это обычный спрайт, на который можно повесить стандартное событие клика (sprite.on('pointerdown', ...)), почти как в обычном HTML.
+Гибкость. Он не навязывает сложную игровую логику, что идеально подходит для интеграции в Angular или Vue.
+Вариант 2: Чистый HTML/CSS + SVG (Без игровых движков)
+Для пошаговых или неторопливых космических стратегий игровой движок на первых порах может быть вообще не нужен.
+Карта Солнечной системы. Орбиты можно нарисовать через тег <svg>, а планеты сделать обычными круглыми <div> с CSS-анимацией вращения.
+Строительство базы. Поверхность планеты — это обычная сетка display: grid (например, 8x8 клеток). Клик по клетке открывает меню постройки, а здание — это просто картинка внутри ячейки.
+Плюсы. Нулевой порог входа, мгновенная верстка и полная мощь Angular или Vue без необходимости связывать их с <canvas>. Перейти на PixiJS можно будет позже, когда станет тесно.
+Какой визуальный стиль выбрать для 2D-базы?
+Чтобы игра выглядела современно и не требовала навыков профессионального художника, лучше всего подходят два стиля:
+Вид строго сверху (Top-Down). Вы смотрите на базу как на чертеж или спутниковый снимок. Квадратная сетка, понятные очертания шахт, ангаров и турелей. Проще всего программировать и рисовать.
+Изометрия (вид под углом 45 градусов). Выглядит более объемно и «по-настоящему» (как в классических стратегиях StarCraft или Red Alert). Для этого не нужно 3D — используются обычные плоские 2D-картинки, нарисованные под углом.
+Чтобы мы могли составить план разработки и написать первый код, подскажите:
+Какой фреймворк вы выберете для проекта (Angular или Vue)?
+С чего хотите начать — со схемы данных (как описать планеты, ресурсы и постройки в коде) или с базового шаблона сцены на PixiJS?
+Я подготовлю для вас понятную архитектуру, с которой будет легко стартовать.
+
+
+
+
+what about d3.js? I have some experience for this framework
+Использование D3.js для космической стратегии — это вполне рабочий и интересный вариант, особенно для карты Солнечной системы и схем базы, но с важными ограничениями для динамичных боев.
+В чем D3.js будет идеален для вашей игры
+Поскольку у вас уже есть опыт работы с D3.js, вы сможете очень быстро сделать прототип без изучения новых инструментов.
+Карта Солнечной системы. D3 превосходно строит орбиты, круговые диаграммы, траектории полета кораблей и маркеры планет с помощью SVG. Вы легко нарисуете линии маршрутов между планетами и привяжете к ним данные о ресурсах.
+Масштабирование и панорамирование (Zoom & Pan). Встроенный модуль d3-zoom дает из коробки плавное приближение колесиком мыши и перетаскивание карты, что идеально подходит для навигации по космосу.
+Привязка данных (Data Binding). Концепция Enter-Update-Exit в D3 создана для того, чтобы автоматически обновлять картинку при изменении данных (например, когда вы построили новое здание или увеличился уровень шахты).
+Аналитика и графики. Внутри самой игры вы сможете легко рисовать красивые графики добычи ресурсов, радиусы действия радаров и прогресс-бары вокруг планет.
+Где у D3.js начнутся проблемы
+D3.js создавался для визуализации данных через DOM (SVG), а не как игровой движок с частотой 60 кадров в секунду.
+Производительность при большом числе объектов. SVG хорошо справляется с парой сотен элементов (планеты, орбиты, здания на сетке). Но если начнется массовый бой, где 50 кораблей одновременно выпускают сотни лазерных снарядов и взрываются, браузер начнет сильно тормозить из-за постоянной перерисовки DOM-дерева.
+Отсутствие игровой инфраструктуры. В D3 нет встроенного игрового цикла (requestAnimationFrame с расчетом дельты времени), системы спрайтов, покадровой анимации взрывов и работы со звуком. Все это придется писать вручную.
+Итоговая рекомендация
+Вы можете смело брать D3.js для MVP (первой рабочей версии). Он закроет 90% ваших задач: карту космоса, перелеты, сетку базы и строительство.
+Совет по архитектуре. Не позволяйте D3 управлять всем подряд внутри Angular или Vue. Выделите ему конкретный контейнер (<svg>), куда он будет отрисовывать карту системы и сетку базы, а кнопки управления и панели ресурсов оставьте самому фреймворку.
+Гибридный подход. Если в будущем захочется зрелищных космических боев с кучей спецэффектов, вы всегда сможете оставить карту мира на D3.js, а окно самого боя отрисовывать через PixiJS на элементе <canvas>.
+Чтобы мы могли перейти к коду, подскажите:
+На каком фреймворке будем делать проект — Angular или Vue?
+Хотите ли вы сначала сделать карту Солнечной системы на D3.js (с кликабельными планетами) или сетку строительства базы?
+Я покажу, как правильно обернуть D3.js в компонент вашего фреймворка, чтобы код не превратился в кашу.
+
+
+
+
+let me more about PixiJS
+PixiJS — это сверхбыстрый 2D-движок рендеринга на базе WebGL (и WebGPU в актуальных версиях), который идеально подходит для создания красивых браузерных стратегий с большим количеством анимаций и спецэффектов.
+Если D3.js работает с векторной графикой внутри DOM (SVG), то PixiJS рисует пиксели напрямую через видеокарту на элементе <canvas>, что дает колоссальный прирост производительности.
+Главные возможности PixiJS для вашей стратегии
+Аппаратное ускорение (WebGL / WebGPU). Вы можете разместить на карте тысячи звезд, десятки орбитальных станций, сотни летящих кораблей и лазерных выстрелов. Игра будет стабильно выдавать 60–120 кадров в секунду даже на слабых ноутбуках.
+Древовидная структура сцены (Scene Graph). Все объекты вложены друг в друга. Например, вы создаете контейнер Planet, кладете внутрь спрайт самой планеты, кольцо орбиты и иконки кораблей. Если вы переместите или уменьшите контейнер Planet, все дочерние элементы сдвинутся и масштабируются вместе с ним.
+Встроенная интерактивность. Несмотря на то, что это <canvas>, работать с объектами так же легко, как в DOM или D3. Любому спрайту можно задать свойство eventMode = 'static' и повесить привычные слушатели событий: pointerdown (клик), pointerover (наведение мыши) или pointermove.
+Шейдеры и фильтры из коробки. В PixiJS легко добавить неоновое свечение (GlowFilter) вокруг звезд, размытие, искажение пространства при прыжке корабля в гиперпространство или подсветку выбранного здания при наведении курсора.
+Атласы спрайтов (Spritesheets). Вместо загрузки 100 отдельных картинок зданий и кораблей, PixiJS позволяет объединить их в один файл-атлас. Это ускоряет загрузку игры и позволяет плавно проигрывать покадровую анимацию (например, вращение радара на базе или взрыв).
+В чем разница между PixiJS и полноценным игровым движком?
+Важно понимать, что PixiJS — это именно рендерер (движок отрисовки), а не комбайн «все в одном» вроде Phaser или Unity.
+Чего в нем НЕТ: встроенной физики столкновений, поиска пути (Pathfinding), звукового движка (хотя для него есть официальный плагин @pixi/sound) и готовых кнопок интерфейса.
+Почему это ПЛЮС для вас: он не навязывает свою архитектуру. Для космической стратегии вам не нужна сложная физика гравитации или столкновений — вся игровая логика (добыча ресурсов, таймеры постройки, расчет урона турелей) легко пишется на чистом TypeScript внутри сервисов Angular или хранилища Vue, а PixiJS просто красиво это рисует.
+Как выглядит базовый цикл работы в PixiJS
+Работа с библиотекой сводится к трем простым шагам:
+Инициализация приложения. Вы создаете экземпляр new Application(), настраиваете размер холста и добавляете его app.canvas в нужный <div> вашего компонента.
+Создание объектов. Загружаете текстуры через Assets.load() и создаете спрайты (new Sprite(texture)) или векторные фигуры (new Graphics() — для рисования орбит, сеток базы и лазерных лучей).
+Игровой цикл (Ticker). PixiJS предоставляет встроенный таймер app.ticker.add((ticker) => { ... }). Функция внутри него вызывается каждый кадр: там вы обновляете углы поворота планет на орбите или двигаете корабли к цели по координатам x и y.
+Сравнение: D3.js против PixiJS для вашей задачи
+Критерий	D3.js (SVG)	PixiJS (Canvas / WebGL)
+Порог входа для вас	Минимальный (уже есть опыт)	Низкий (понятный API на TypeScript)
+Зум и панорамирование	Встроено (d3-zoom)	Нужно подключить плагин pixi-viewport
+Графики и схемы	Идеально	Не предназначен
+Спецэффекты (свечение, частицы)	Ограничено и тормозит	Великолепно, работает на видеокарте
+Массовые бои (100+ объектов)	Начнет лагать	Летает на 60+ FPS
+Хотите увидеть небольшой пример кода, как инициализировать сцену PixiJS (например, нарисовать Солнце, орбиту и вращающуюся вокруг него планету) внутри компонента Angular или Vue? Уточните, какой из этих двух фреймворков вам ближе.
+
+
+
+
+yes
+Поскольку вы не уточнили, какой из двух фреймворков вам ближе, я подготовил базовый пример на Vue 3 (Composition API + TypeScript) с использованием актуальной версии PixiJS v8, так как его синтаксис короче и нагляднее для быстрого старта.
+В этом примере мы создадим сцену с Солнцем в центре, нарисуем орбиту, запустим вокруг нее планету и добавим обработчик клика, который передает данные о выбранной планете обратно во Vue.
+Установка пакета
+Сначала установите библиотеку в ваш проект:
+bash
+npm install pixi.js
+Use code with caution.
+Код компонента (SolarSystem.vue)
+Этот компонент берет на себя инициализацию холста, игровой цикл вращения и корректную очистку памяти при закрытии страницы.
+vue
+<template>
+  <div class="game-wrapper">
+    <!-- Контейнер, куда PixiJS вставит свой <canvas> -->
+    <div ref="pixiContainer" class="canvas-container"></div>
+
+    <!-- Обычный HTML-интерфейс Vue поверх игры -->
+    <div v-if="selectedPlanet" class="ui-panel">
+      <h3>Планета: {{ selectedPlanet.name }}</h3>
+      <p>Ресурсы: {{ selectedPlanet.resources }}</p>
+      <button @click="selectedPlanet = null">Закрыть</button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
+import { Application, Graphics } from 'pixi.js';
+
+interface PlanetInfo {
+  name: string;
+  resources: string;
+}
+
+const pixiContainer = ref<HTMLElement | null>(null);
+const selectedPlanet = ref<PlanetInfo | null>(null);
+
+// Храним ссылку на приложение Pixi вне реактивности Vue (ref/reactive),
+// чтобы не замедлять рендеринг
+let app: Application | null = null;
+
+onMounted(async () => {
+  if (!pixiContainer.value) return;
+
+  // 1. Инициализируем приложение PixiJS v8
+  app = new Application();
+  await app.init({
+    width: 800,
+    height: 600,
+    backgroundColor: 0x090a0f, // Цвет глубокого космоса
+    antialias: true, // Сглаживание краев фигур
+  });
+
+  // Добавляем сгенерированный <canvas> в DOM
+  pixiContainer.value.appendChild(app.canvas);
+
+  const centerX = app.screen.width / 2;
+  const centerY = app.screen.height / 2;
+
+  // 2. Рисуем Солнце
+  const sun = new Graphics()
+    .circle(0, 0, 35)
+    .fill(0xffcc00);
+  sun.position.set(centerX, centerY);
+  app.stage.addChild(sun);
+
+  // 3. Рисуем линию орбиты
+  const orbitRadius = 180;
+  const orbit = new Graphics()
+    .circle(0, 0, orbitRadius)
+    .stroke({ width: 1, color: 0xffffff, alpha: 0.25 });
+  orbit.position.set(centerX, centerY);
+  app.stage.addChild(orbit);
+
+  // 4. Создаем кликабельную планету
+  const planet = new Graphics()
+    .circle(0, 0, 14)
+    .fill(0x3b82f6); // Синий цвет (например, Земля)
+
+  // Включаем интерактивность для планеты
+  planet.eventMode = 'static';
+  planet.cursor = 'pointer';
+
+  // Реагируем на клик и передаем данные во Vue
+  planet.on('pointerdown', () => {
+    selectedPlanet.value = {
+      name: 'Терра-3',
+      resources: 'Железо (высоко), Вода (высоко)',
+    };
+  });
+
+  app.stage.addChild(planet);
+
+  // 5. Запускаем игровой цикл (вращение планеты по орбите)
+  let angle = 0;
+  app.ticker.add((ticker) => {
+    // ticker.deltaTime гарантирует одинаковую скорость на мониторах 60Hz и 144Hz
+    angle += 0.01 * ticker.deltaTime;
+    planet.x = centerX + Math.cos(angle) * orbitRadius;
+    planet.y = centerY + Math.sin(angle) * orbitRadius;
+  });
+});
+
+onUnmounted(() => {
+  // Обязательно уничтожаем сцену при уходе со страницы, чтобы не было утечек памяти
+  if (app) {
+    app.destroy(true, { children: true });
+    app = null;
+  }
+});
+</script>
+
+<style scoped>
+.game-wrapper {
+  position: relative;
+  width: 800px;
+  height: 600px;
+}
+.ui-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(15, 23, 42, 0.9);
+  color: white;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+</style>
+Use code with caution.
+На что обратить внимание в этом коде
+Разделение ответственности. PixiJS занимается только расчетом координат (x, y) и отрисовкой кругов. Как только вы кликаете на планету, она меняет переменную selectedPlanet, и в углу экрана появляется обычная HTML-панель Vue.
+Отсутствие ref() для объектов игры. Обратите внимание, что переменная app объявлена как обычный let app: Application | null = null. Никогда не оборачивайте объекты PixiJS в ref() или reactive(), иначе Vue попытается отслеживать каждое изменение координат 60 раз в секунду, что убьет производительность.
+Независимость от частоты кадров. Умножение скорости на ticker.deltaTime делает так, что планета совершит полный оборот за одно и то же время на любом экране.
+Как вам удобнее двигаться дальше:
+Показать аналогичный пример для Angular (с использованием NgZone и сигналов)?
+Добавить в этот пример режим приближения к планете (экран базы) с сеткой для строительства зданий?
+
+
+
+
+Показать аналогичный пример для Angular
+Для интеграции PixiJS в Angular ключевое правило — запускать игровой цикл внутри NgZone.runOutsideAngular(), а для интерфейса использовать Angular Signals. Это предотвращает запуск проверки изменений (Change Detection) 60 раз в секунду и сохраняет максимальную производительность.
+Ниже приведен полный пример автономного компонента (Standalone Component) на актуальном Angular с использованием PixiJS v8.
+Установка пакета
+Установите актуальную версию библиотеки в проект:
+bash
+npm install pixi.js
+Use code with caution.
+Код компонента (solar-system.component.ts)
+Этот компонент создает сцену с Солнцем и вращающейся планетой. При клике на планету мы возвращаемся в зону Angular (ngZone.run), чтобы обновить сигнал selectedPlanet и мгновенно отрисовать HTML-панель.
+typescript
+import {
+  Component,
+  ElementRef,
+  ViewChild,
+  AfterViewInit,
+  OnDestroy,
+  inject,
+  NgZone,
+  signal,
+} from '@angular/core';
+import { Application, Graphics } from 'pixi.js';
+
+interface PlanetInfo {
+  name: string;
+  resources: string;
+}
+
+@Component({
+  selector: 'app-solar-system',
+  standalone: true,
+  template: `
+    <div class="game-wrapper">
+      <!-- Контейнер, куда PixiJS вставит <canvas> -->
+      <div #pixiContainer class="canvas-container"></div>
+
+      <!-- Обычный HTML-интерфейс Angular поверх игры -->
+      @if (selectedPlanet(); as planet) {
+        <div class="ui-panel">
+          <h3>Планета: {{ planet.name }}</h3>
+          <p>Ресурсы: {{ planet.resources }}</p>
+          <button (click)="closePanel()">Закрыть</button>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .game-wrapper {
+      position: relative;
+      width: 800px;
+      height: 600px;
+    }
+    .ui-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      color: white;
+      padding: 16px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+  `],
+})
+export class SolarSystemComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('pixiContainer', { static: true })
+  pixiContainer!: ElementRef<HTMLDivElement>;
+
+  private ngZone = inject(NgZone);
+  private app: Application | null = null;
+
+  // Используем Signal для реактивного обновления UI
+  selectedPlanet = signal<PlanetInfo | null>(null);
+
+  ngAfterViewInit(): void {
+    // Запускаем PixiJS строго за пределами зоны отслеживания Angular
+    this.ngZone.runOutsideAngular(() => {
+      this.initPixi();
+    });
+  }
+
+  private async initPixi(): Promise<void> {
+    this.app = new Application();
+    await this.app.init({
+      width: 800,
+      height: 600,
+      backgroundColor: 0x090a0f,
+      antialias: true,
+    });
+
+    this.pixiContainer.nativeElement.appendChild(this.app.canvas);
+
+    const centerX = this.app.screen.width / 2;
+    const centerY = this.app.screen.height / 2;
+
+    // 1. Рисуем Солнце
+    const sun = new Graphics().circle(0, 0, 35).fill(0xffcc00);
+    sun.position.set(centerX, centerY);
+    this.app.stage.addChild(sun);
+
+    // 2. Рисуем линию орбиты
+    const orbitRadius = 180;
+    const orbit = new Graphics()
+      .circle(0, 0, orbitRadius)
+      .stroke({ width: 1, color: 0xffffff, alpha: 0.25 });
+    orbit.position.set(centerX, centerY);
+    this.app.stage.addChild(orbit);
+
+    // 3. Создаем кликабельную планету
+    const planet = new Graphics().circle(0, 0, 14).fill(0x3b82f6);
+    planet.eventMode = 'static';
+    planet.cursor = 'pointer';
+
+    // Обработка клика
+    planet.on('pointerdown', () => {
+      // Возвращаемся в NgZone, чтобы Angular увидел изменение сигнала
+      this.ngZone.run(() => {
+        this.selectedPlanet.set({
+          name: 'Терра-3',
+          resources: 'Железо (высоко), Вода (высоко)',
+        });
+      });
+    });
+
+    this.app.stage.addChild(planet);
+
+    // 4. Игровой цикл (работает в фоне без нагрузки на Angular)
+    let angle = 0;
+    this.app.ticker.add((ticker) => {
+      angle += 0.01 * ticker.deltaTime;
+      planet.x = centerX + Math.cos(angle) * orbitRadius;
+      planet.y = centerY + Math.sin(angle) * orbitRadius;
+    });
+  }
+
+  closePanel(): void {
+    this.selectedPlanet.set(null);
+  }
+
+  ngOnDestroy(): void {
+    // Очищаем ресурсы видеокарты и памяти при уничтожении компонента
+    if (this.app) {
+      this.app.destroy(true, { children: true });
+      this.app = null;
+    }
+  }
+}
+Use code with caution.
+Ключевые особенности реализации на Angular
+Изоляция игрового цикла (runOutsideAngular). Внутри this.app.ticker координаты планеты меняются 60–144 раза в секунду. Благодаря выходу из зоны Angular фреймворк игнорирует эти тики и не перепроверяет весь DOM-дерево приложения.
+Возврат в зону при клике (ngZone.run). Событие pointerdown срабатывает внутри холста PixiJS (вне зоны Angular). Обертка this.ngZone.run() гарантирует, что после обновления сигнала selectedPlanet блок @if в шаблоне мгновенно отобразится на экране.
+Чистая архитектура. По мере роста игры всю логику добычи ресурсов, таймеры строительства и список планет стоит вынести в отдельный @Injectable() сервис. Компонент PixiJS будет только подписываться на данные из этого сервиса и рисовать их.
+Хотите продолжить развитие этого прототипа на Angular? Я могу показать, как сделать переключение экрана на поверхность планеты с ограниченной сеткой базы, где по клику на клетку можно строить и улучшать здания.
+
+
+
+
+переключение экрана на поверхность планеты с ограниченной сеткой базы
+Для реализации переключения между картой космоса и поверхностью планеты в PixiJS лучше всего использовать два отдельных контейнера (Container). Один контейнер хранит Солнечную систему, второй — сетку базы, и при переключении мы просто меняем их видимость (visible = true / false).
+Ниже приведен обновленный код компонента Angular. Теперь при клике на планету можно нажать кнопку «Перейти на базу», после чего откроется ограниченное поле 6x6 клеток, где можно строить и улучшать здания (Шахту и Турель).
+Обновленный код компонента (solar-system.component.ts)
+typescript
+import {
+  Component,
+  ElementRef,
+  ViewChild,
+  AfterViewInit,
+  OnDestroy,
+  inject,
+  NgZone,
+  signal,
+} from '@angular/core';
+import { Application, Container, Graphics, Text } from 'pixi.js';
+
+interface PlanetInfo {
+  name: string;
+  resources: string;
+}
+
+interface BuildingData {
+  type: 'mine' | 'turret';
+  name: string;
+  level: number;
+  color: number;
+}
+
+interface SelectedCell {
+  row: number;
+  col: number;
+  building: BuildingData | null;
+}
+
+@Component({
+  selector: 'app-solar-system',
+  standalone: true,
+  template: `
+    <div class="game-wrapper">
+      <!-- Холст PixiJS -->
+      <div #pixiContainer class="canvas-container"></div>
+
+      <!-- Верхняя панель навигации и ресурсов -->
+      <div class="top-bar">
+        <span>Металл: <strong>{{ metal() }}</strong></span>
+        @if (currentView() === 'base') {
+          <button (click)="switchToSpace()">← В космос</button>
+        }
+      </div>
+
+      <!-- Панель информации о планете (в режиме космоса) -->
+      @if (currentView() === 'space' && selectedPlanet(); as planet) {
+        <div class="ui-panel">
+          <h3>Планета: {{ planet.name }}</h3>
+          <p>Ресурсы: {{ planet.resources }}</p>
+          <div class="actions">
+            <button class="primary" (click)="switchToBase()">Открыть базу</button>
+            <button (click)="selectedPlanet.set(null)">Закрыть</button>
+          </div>
+        </div>
+      }
+
+      <!-- Панель строительства и улучшения (в режиме базы) -->
+      @if (currentView() === 'base' && selectedCell(); as cell) {
+        <div class="ui-panel">
+          <h3>Сектор [{{ cell.row + 1 }}, {{ cell.col + 1 }}]</h3>
+
+          @if (!cell.building) {
+            <p>Свободный участок. Выберите постройку:</p>
+            <div class="actions">
+              <button [disabled]="metal() < 50" (click)="build('mine')">
+                Шахта (50 мет.)
+              </button>
+              <button [disabled]="metal() < 80" (click)="build('turret')">
+                Турель (80 мет.)
+              </button>
+            </div>
+          } @else {
+            <p>Здание: <strong>{{ cell.building.name }}</strong></p>
+            <p>Уровень: <strong>{{ cell.building.level }}</strong></p>
+            <div class="actions">
+              <button
+                class="primary"
+                [disabled]="metal() < cell.building.level * 50"
+                (click)="upgradeBuilding()"
+              >
+                Улучшить ({{ cell.building.level * 50 }} мет.)
+              </button>
+            </div>
+          }
+          <button class="close-btn" (click)="selectedCell.set(null)">Отмена</button>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .game-wrapper {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      font-family: sans-serif;
+    }
+    .top-bar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.9);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+    .ui-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 240px;
+      background: rgba(15, 23, 42, 0.95);
+      color: white;
+      padding: 16px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
+      background: #334155;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover:not(:disabled) {
+      background: #475569;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.primary {
+      background: #2563eb;
+    }
+    .close-btn {
+      margin-top: 12px;
+      width: 100%;
+      background: transparent;
+      border: 1px solid #475569;
+    }
+  `],
+})
+export class SolarSystemComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('pixiContainer', { static: true })
+  pixiContainer!: ElementRef<HTMLDivElement>;
+
+  private ngZone = inject(NgZone);
+  private app: Application | null = null;
+
+  // Два главных контейнера для переключения экранов
+  private spaceContainer = new Container();
+  private baseContainer = new Container();
+
+  // Храним ссылки на ячейки сетки и состояние зданий
+  private gridSize = 6;
+  private cellSize = 64;
+  private gridData: (BuildingData | null)[][] = Array.from({ length: 6 }, () =>
+    Array(6).fill(null)
+  );
+  private cellContainers: Container[][] = [];
+
+  // Состояние игры на сигналах Angular
+  currentView = signal<'space' | 'base'>('space');
+  metal = signal<number>(200);
+  selectedPlanet = signal<PlanetInfo | null>(null);
+  selectedCell = signal<SelectedCell | null>(null);
+
+  ngAfterViewInit(): void {
+    this.ngZone.runOutsideAngular(() => {
+      this.initPixi();
+    });
+  }
+
+  private async initPixi(): Promise<void> {
+    this.app = new Application();
+    await this.app.init({
+      width: 800,
+      height: 600,
+      backgroundColor: 0x090a0f,
+      antialias: true,
+    });
+
+    this.pixiContainer.nativeElement.appendChild(this.app.canvas);
+
+    // Добавляем оба контейнера на сцену, но базу изначально скрываем
+    this.baseContainer.visible = false;
+    this.app.stage.addChild(this.spaceContainer);
+    this.app.stage.addChild(this.baseContainer);
+
+    this.buildSpaceScene();
+    this.buildBaseGridScene();
+  }
+
+  // --- СЦЕНА 1: КОСМОС ---
+  private buildSpaceScene(): void {
+    if (!this.app) return;
+    const centerX = this.app.screen.width / 2;
+    const centerY = this.app.screen.height / 2;
+
+    const sun = new Graphics().circle(0, 0, 35).fill(0xffcc00);
+    sun.position.set(centerX, centerY);
+    this.spaceContainer.addChild(sun);
+
+    const orbitRadius = 180;
+    const orbit = new Graphics()
+      .circle(0, 0, orbitRadius)
+      .stroke({ width: 1, color: 0xffffff, alpha: 0.25 });
+    orbit.position.set(centerX, centerY);
+    this.spaceContainer.addChild(orbit);
+
+    const planet = new Graphics().circle(0, 0, 14).fill(0x3b82f6);
+    planet.eventMode = 'static';
+    planet.cursor = 'pointer';
+
+    planet.on('pointerdown', () => {
+      this.ngZone.run(() => {
+        this.selectedPlanet.set({
+          name: 'Терра-3',
+          resources: 'Железо (высоко), Вода (высоко)',
+        });
+      });
+    });
+
+    this.spaceContainer.addChild(planet);
+
+    let angle = 0;
+    this.app.ticker.add((ticker) => {
+      // Вращаем планету только когда открыт экран космоса
+      if (!this.spaceContainer.visible) return;
+      angle += 0.01 * ticker.deltaTime;
+      planet.x = centerX + Math.cos(angle) * orbitRadius;
+      planet.y = centerY + Math.sin(angle) * orbitRadius;
+    });
+  }
+
+  // --- СЦЕНА 2: СЕТКА БАЗЫ (6x6) ---
+  private buildBaseGridScene(): void {
+    const startX = 160;
+    const startY = 110;
+    const gap = 6;
+
+    for (let row = 0; row < this.gridSize; row++) {
+      this.cellContainers[row] = [];
+      for (let col = 0; col < this.gridSize; col++) {
+        const cellWrapper = new Container();
+        cellWrapper.position.set(
+          startX + col * (this.cellSize + gap),
+          startY + row * (this.cellSize + gap)
+        );
+
+        // Фон клетки поверхности
+        const bg = new Graphics()
+          .roundRect(0, 0, this.cellSize, this.cellSize, 6)
+          .fill(0x1e293b)
+          .stroke({ width: 1, color: 0x334155 });
+
+        cellWrapper.addChild(bg);
+        cellWrapper.eventMode = 'static';
+        cellWrapper.cursor = 'pointer';
+
+        // Подсветка клетки при наведении мыши
+        cellWrapper.on('pointerover', () => (bg.tint = 0x94a3b8));
+        cellWrapper.on('pointerout', () => (bg.tint = 0xffffff));
+
+        // Клик по клетке
+        cellWrapper.on('pointerdown', () => {
+          this.ngZone.run(() => {
+            this.selectedCell.set({
+              row,
+              col,
+              building: this.gridData[row][col],
+            });
+          });
+        });
+
+        this.baseContainer.addChild(cellWrapper);
+        this.cellContainers[row][col] = cellWrapper;
+      }
+    }
+  }
+
+  // Перерисовка конкретного здания внутри клетки
+  private renderBuildingInCell(row: number, col: number): void {
+    const wrapper = this.cellContainers[row][col];
+    // Удаляем старую отрисовку здания (оставляем только фон с индексом 0)
+    while (wrapper.children.length > 1) {
+      wrapper.removeChildAt(1);
+    }
+
+    const building = this.gridData[row][col];
+    if (!building) return;
+
+    // Рисуем корпус здания
+    const buildingShape = new Graphics()
+      .roundRect(10, 10, this.cellSize - 20, this.cellSize - 20, 4)
+      .fill(building.color);
+
+    // Пишем уровень здания поверх фигуры
+    const levelText = new Text({
+      text: `Ур.${building.level}`,
+      style: { fontSize: 12, fill: 0xffffff, fontWeight: 'bold' },
+    });
+    levelText.anchor.set(0.5);
+    levelText.position.set(this.cellSize / 2, this.cellSize / 2);
+
+    wrapper.addChild(buildingShape, levelText);
+  }
+
+  // --- МЕТОДЫ УПРАВЛЕНИЯ ЭКРАНАМИ И СТРОИТЕЛЬСТВОМ ---
+
+  switchToBase(): void {
+    this.spaceContainer.visible = false;
+    this.baseContainer.visible = true;
+    this.currentView.set('base');
+    this.selectedPlanet.set(null);
+  }
+
+  switchToSpace(): void {
+    this.baseContainer.visible = false;
+    this.spaceContainer.visible = true;
+    this.currentView.set('space');
+    this.selectedCell.set(null);
+  }
+
+  build(type: 'mine' | 'turret'): void {
+    const cell = this.selectedCell();
+    if (!cell || cell.building) return;
+
+    const cost = type === 'mine' ? 50 : 80;
+    if (this.metal() < cost) return;
+
+    this.metal.update((m) => m - cost);
+
+    const newBuilding: BuildingData =
+      type === 'mine'
+        ? { type: 'mine', name: 'Металлург. шахта', level: 1, color: 0xf59e0b }
+        : { type: 'turret', name: 'Лазерная турель', level: 1, color: 0xef4444 };
+
+Use code with caution.
+this.gridData[cell.row][cell.col] = newBuilding;
+this.renderBuildingInCell(cell.row, cell.col);
+// Обновляем панель интерфейса
+this.selectedCell.set({ ...cell, building: newBuilding });
+}
+upgradeBuilding(): void {
+const cell = this.selectedCell();
+if (!cell || !cell.building) return;
+const cost = cell.building.level * 50;
+if (this.metal() < cost) return;
+this.metal.update((m) => m - cost);
+cell.building.level += 1;
+this.renderBuildingInCell(cell.row, cell.col);
+this.selectedCell.set({ ...cell });
+}
+ngOnDestroy(): void {
+if (this.app) {
+this.app.destroy(true, { children: true });
+this.app = null;
+}
+}
+}
+
+---
+
+### Как это работает под капотом
+
+* **Мгновенное переключение без пересоздания объектов.** Мы не удаляем космос при входе на базу и не рисуем сетку заново при возврате. Свойство `container.visible = false` полностью отключает отрисовку скрытого слоя и обработку кликов по нему.
+* **Синхронизация данных и графики.** Двумерный массив `gridData` хранит чистые данные (тип постройки и ее уровень), а `cellContainers` хранит визуальные элементы PixiJS. Когда игрок нажимает «Построить» или «Улучшить» в HTML-меню Angular, обновляется массив данных и перерисовывается только одна конкретная ячейка.
+* **Оптимизация игрового цикла.** Внутри `app.ticker` добавлена проверка `if (!this.spaceContainer.visible) return;`, чтобы координаты планет не пересчитывались впустую, пока игрок занимается строительством на поверхности.
+
+<FollowUp>
+Что добавим в игру следующим шагом:
+* **Таймер добычи ресурсов**, чтобы построенные шахты автоматически приносили металл каждую секунду (даже когда вы находитесь в космосе)?
+* **Поддержку нескольких планет**, чтобы у каждой планеты была своя независимая сетка базы и свой набор ресурсов?
+</FollowUp>
+
+
+
+
+what is better to use for server? I think about use java spring bootstrap (or java play) with rest api + postgresql for DB, because I have some experience for use it. And save data bout resources of planets once in second. Data about users progress saving in time: ex. in create building or spaceship
+Связка Java (Spring Boot) + PostgreSQL — это отличный, надежный выбор для бэкенда космической стратегии, особенно учитывая ваш опыт. Однако сохранять ресурсы в базу данных каждую секунду не нужно — для этого в играх используют расчет на лету по меткам времени.
+Выбор стека: Spring Boot против Play Framework
+Spring Boot (Рекомендуется). Это современный стандарт в мире Java с огромной экосистемой. В нем очень удобно делать REST API, настраивать авторизацию через Spring Security (JWT) и работать с базой через Spring Data JPA.
+Play Framework. Тоже неплох, так как изначально асинхронный, но сейчас его сообщество значительно меньше, чем у Spring, и найти свежие решения для типичных задач сложнее.
+Главная ловушка: запись ресурсов в БД каждую секунду
+Если у вас в игре будет хотя бы 500 активных игроков и у каждого по 3 планеты, запись в PostgreSQL каждую секунду создаст 1500 тяжелых транзакций в секунду на ровном месте. База данных быстро упрется в лимит операций с диском.
+Как это решают в браузерных стратегиях (Lazy Calculation / Ленивый расчет):
+Храните время последнего обновления. В таблице планеты в PostgreSQL вы записываете три поля: metal_amount (текущий запас), production_per_hour (скорость добычи в час) и last_updated_at (точная дата и время последнего пересчета).
+Считайте на клиенте для красоты. Angular получает эти три цифры при входе в игру и локально каждую секунду прибавляет к счетчику production_per_hour / 3600, чтобы игрок видел плавный рост цифр на экране.
+Пересчитывайте на сервере только при действиях. Когда игрок нажимает «Построить шахту» или «Улучшить здание», сервер берет текущее время now(), вычитает last_updated_at, начисляет накопленные за это время ресурсы, списывает стоимость постройки и обновляет last_updated_at = now().
+Плюсы подхода. Нагрузка на PostgreSQL падает в тысячи раз, а ресурсы продолжают копиться, даже если игрок закрыл браузер и ушел спать.
+Как обрабатывать строительство и постройку кораблей по времени
+Для процессов, которые длятся минуты или часы (строительство, исследование, полет флота), тоже не нужно держать фоновые потоки каждую секунду.
+Очередь задач через метки времени. В таблице базы создайте поля building_in_progress (какое здание строится) и finish_at (время завершения).
+Проверка по запросу. Когда игрок заходит на планету или истекает таймер на клиенте, Angular делает запрос на сервер. Spring Boot проверяет: если now() >= finish_at, он повышает уровень здания в базе, пересчитывает скорость добычи ресурсов и очищает очередь.
+Защита от читов. Все проверки («хватает ли металла?», «закончилось ли время постройки?») всегда должны выполняться только на стороне Spring Boot. Фронтенд на Angular отвечает лишь за визуальное отображение таймеров.
+Нужен ли WebSocket вместо REST API?
+На старте хватит обычного REST API. Для строительства, улучшения шахт, заказа кораблей и отправки флота обычных HTTP-запросов (GET, POST) более чем достаточно.
+Когда понадобится WebSocket (STOMP в Spring). Если вы решите добавить общий игровой чат, живые уведомления о том, что на вашу планету прямо сейчас летит вражеский флот, или совместные бои в реальном времени.
+Хотите, чтобы я набросал схему таблиц для PostgreSQL (игроки, планеты, сетка зданий, очередь строительства) и показал пример логики ленивого пересчета ресурсов на Java?
+
+
+
+
+yes
+Ниже представлена надежная структура базы данных для PostgreSQL и сервис на Java (Spring Boot), реализующий ленивый пересчет ресурсов и завершение строительства по меткам времени.
+1. Схема таблиц PostgreSQL
+Такая структура позволяет хранить планеты с разными ресурсами, ограниченную сетку зданий (по координатам row и col) и очередь постройки.
+sql
+-- 1. Игроки
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Планеты игрока
+CREATE TABLE planets (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    
+    -- Коэффициенты богатства планеты (например, 1.5 для богатой железом планеты)
+    metal_multiplier DOUBLE PRECISION DEFAULT 1.0,
+    crystal_multiplier DOUBLE PRECISION DEFAULT 1.0,
+    
+    -- Текущие запасы на момент last_updated_at
+    metal_amount DOUBLE PRECISION DEFAULT 500.0,
+    crystal_amount DOUBLE PRECISION DEFAULT 200.0,
+    
+    -- Базовая скорость добычи в час (пересчитывается при улучшении шахт)
+    metal_per_hour DOUBLE PRECISION DEFAULT 60.0,
+    crystal_per_hour DOUBLE PRECISION DEFAULT 30.0,
+    
+    -- Ключевое поле для ленивого расчета
+    last_updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Здания на ограниченной сетке планеты
+CREATE TABLE planet_buildings (
+    id BIGSERIAL PRIMARY KEY,
+    planet_id BIGINT REFERENCES planets(id) ON DELETE CASCADE,
+    grid_row INT NOT NULL,
+    grid_col INT NOT NULL,
+    building_type VARCHAR(30) NOT NULL, -- 'MINE', 'CRYSTAL_SYNTH', 'TURRET', 'SHIPYARD'
+    level INT DEFAULT 1,
+    
+    -- Если здание сейчас строится или улучшается, здесь хранится время окончания
+    upgrade_finish_at TIMESTAMP WITH TIME ZONE NULL,
+    
+    -- Запрещаем строить два здания в одной клетке
+    UNIQUE(planet_id, grid_row, grid_col)
+);
+
+-- 4. Очередь постройки кораблей (Верфь)
+CREATE TABLE ship_queue (
+    id BIGSERIAL PRIMARY KEY,
+    planet_id BIGINT REFERENCES planets(id) ON DELETE CASCADE,
+    ship_type VARCHAR(30) NOT NULL, -- 'FIGHTER', 'CRUISER'
+    quantity INT NOT NULL,
+    finish_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+Use code with caution.
+2. Логика на Java (Spring Boot)
+В этом сервисе собраны два главных механизма: синхронизация ресурсов за прошедшие секунды и проверка, не завершилось ли строительство к текущему моменту.
+java
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+@Service
+public class PlanetEconomyService {
+
+    private final PlanetRepository planetRepository;
+    private final BuildingRepository buildingRepository;
+
+    public PlanetEconomyService(PlanetRepository planetRepository, BuildingRepository buildingRepository) {
+        this.planetRepository = planetRepository;
+        this.buildingRepository = buildingRepository;
+    }
+
+    /**
+     * Главный метод синхронизации.
+     * Вызывается перед любым действием игрока (вход в игру, клик "Построить", "Улучшить").
+     */
+    @Transactional
+    public Planet syncPlanetState(Long planetId) {
+        Planet planet = planetRepository.findById(planetId)
+                .orElseThrow(() -> new RuntimeException("Планета не найдена"));
+
+        Instant now = Instant.now();
+
+        // 1. Считаем, сколько секунд прошло с последнего сохранения
+        long secondsPassed = Duration.between(planet.getLastUpdatedAt(), now).getSeconds();
+
+        if (secondsPassed > 0) {
+            double hoursPassed = secondsPassed / 3600.0;
+
+            // Начисляем ресурсы с учетом скорости добычи и бонуса самой планеты
+            double minedMetal = planet.getMetalPerHour() * planet.getMetalMultiplier() * hoursPassed;
+            double minedCrystal = planet.getCrystalPerHour() * planet.getCrystalMultiplier() * hoursPassed;
+
+            planet.setMetalAmount(planet.getMetalAmount() + minedMetal);
+            planet.setCrystalAmount(planet.getCrystalAmount() + minedCrystal);
+            planet.setLastUpdatedAt(now);
+        }
+
+        // 2. Проверяем, не закончилось ли строительство/улучшение зданий
+        List<PlanetBuilding> buildings = buildingRepository.findByPlanetId(planetId);
+        boolean productionChanged = false;
+
+        for (PlanetBuilding building : buildings) {
+            if (building.getUpgradeFinishAt() != null && !now.isBefore(building.getUpgradeFinishAt())) {
+                // Время вышло! Повышаем уровень и очищаем таймер
+                building.setLevel(building.getLevel() + 1);
+                building.setUpgradeFinishAt(null);
+                buildingRepository.save(building);
+                productionChanged = true;
+            }
+        }
+
+        // 3. Если шахта достроилась, пересчитываем общую добычу в час
+        if (productionChanged) {
+            recalculateProduction(planet, buildings);
+        }
+
+        return planetRepository.save(planet);
+    }
+
+    /**
+     * Пример заказа улучшения здания игроком
+     */
+    @Transactional
+    public PlanetBuilding startBuildingUpgrade(Long planetId, int row, int col) {
+        // Сначала актуализируем ресурсы и завершаем старые стройки!
+        Planet planet = syncPlanetState(planetId);
+
+        PlanetBuilding building = buildingRepository.findByPlanetIdAndGridRowAndGridCol(planetId, row, col)
+                .orElseThrow(() -> new RuntimeException("Здание не найдено"));
+
+        if (building.getUpgradeFinishAt() != null) {
+            throw new IllegalStateException("Здание уже улучшается");
+        }
+
+        double upgradeCost = building.getLevel() * 100.0;
+        if (planet.getMetalAmount() < upgradeCost) {
+            throw new IllegalStateException("Недостаточно металла");
+        }
+
+        // Списываем ресурсы
+        planet.setMetalAmount(planet.getMetalAmount() - upgradeCost);
+        planetRepository.save(planet);
+
+        // Запускаем таймер (например, 30 секунд * текущий уровень)
+        long buildDurationSeconds = building.getLevel() * 30L;
+        building.setUpgradeFinishAt(Instant.now().plusSeconds(buildDurationSeconds));
+
+        return buildingRepository.save(building);
+    }
+
+    private void recalculateProduction(Planet planet, List<PlanetBuilding> buildings) {
+        double totalMetalPerHour = 60.0; // Базовая добыча колонии
+        for (PlanetBuilding b : buildings) {
+            if ("MINE".equals(b.getBuildingType())) {
+                // Каждая шахта дает +100 металла в час за уровень
+                totalMetalPerHour += b.getLevel() * 100.0;
+            }
+        }
+        planet.setMetalPerHour(totalMetalPerHour);
+    }
+}
+Use code with caution.
+Почему эта архитектура идеальна для вашей игры
+Защита от рассинхронизации (Race Conditions). Используйте в PlanetRepository пессимистичную блокировку (@Lock(LockModeType.PESSIMISTIC_WRITE)) при загрузке планеты в методе syncPlanetState. Это гарантирует, что если игрок дважды быстро кликнет на кнопку строительства, второй запрос подождет завершения первого и не спишет ресурсы в минус.
+Точность до миллисекунды. Так как поле metal_amount имеет тип DOUBLE PRECISION, даже если игрок совершает действия каждые 2 секунды, дробные доли добытого металла не теряются при округлении. На фронтенде (Angular) вы просто округляете число вниз через Math.floor(metal) при выводе на экран.
+Легкость масштабирования. Даже если в игре зарегистрируются тысячи игроков, база данных будет спать, пока игроки не нажимают кнопки в интерфейсе.
+Что бы вы хотели разобрать дальше для связки фронтенда и бэкенда:
+Как правильно синхронизировать таймеры на Angular с серверным временем (upgradeFinishAt), чтобы полоска прогресса строительства шла плавно и не зависела от часов на компьютере игрока?
+Как спроектировать логику нападения врагов и обороны базы (расчет боя между флотом и турелями)?
+
+
+
+
+• Как правильно синхронизировать таймеры на Angular с серверным временем (upgradeFinishAt), чтобы полоска прогресса строительства шла плавно и не зависела от часов на компьютере игрока?
+Чтобы таймеры строительства не зависели от системных часов на компьютере игрока (которые могут спешить, отставать или быть переведены вручную), нужно вычислить разницу (timeOffset) между временем сервера и временем клиента при первом же ответе от Spring Boot.
+После этого Angular сможет рассчитывать точное «серверное время» в любой момент без постоянных сетевых запросов и плавно обновлять полоску прогресса.
+Шаг 1. Передача времени сервера (Spring Boot)
+В каждый ответ API (или в специальный заголовок / поле DTO) добавьте текущее время сервера serverTime.
+java
+public record PlanetStateResponse(
+    Instant serverTime,        // Точное время на сервере в момент ответа
+    double metalAmount,
+    double metalPerHour,
+    List<BuildingDto> buildings
+) {}
+
+public record BuildingDto(
+    Long id,
+    int row,
+    int col,
+    String type,
+    int level,
+    Instant upgradeStartedAt,  // Когда началось (нужно для % прогресса)
+    Instant upgradeFinishAt    // Когда закончится
+) {}
+Use code with caution.
+Шаг 2. Сервис синхронизации времени в Angular
+Создайте небольшой сервис, который запоминает поправку времени и умеет отдавать актуальное серверное время в миллисекундах.
+typescript
+import { Injectable } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class ServerTimeService {
+  // Разница в миллисекундах между сервером и браузером
+  private offsetMs = 0;
+
+  /**
+   * Вызывается каждый раз, когда приходят свежие данные от Spring Boot
+   */
+  syncWithServer(serverTimeIso: string): void {
+    const serverMillis = new Date(serverTimeIso).getTime();
+    const clientMillis = Date.now();
+    this.offsetMs = serverMillis - clientMillis;
+  }
+
+  /**
+   * Возвращает текущее время, синхронизированное с сервером
+   */
+  now(): number {
+    return Date.now() + this.offsetMs;
+  }
+}
+Use code with caution.
+Шаг 3. Плавный прогресс-бар и автозавершение (Angular)
+Чтобы полоска прогресса заполнялась плавно (60 раз в секунду) и не нагружала приложение, используйте requestAnimationFrame внутри NgZone.runOutsideAngular(), обновляя сигнал раз в 50–100 мс (этого достаточно для идеальной плавности глаза).
+typescript
+import { Component, Input, OnInit, OnDestroy, inject, signal, NgZone } from '@angular/core';
+import { ServerTimeService } from './server-time.service';
+
+@Component({
+  selector: 'app-building-progress',
+  standalone: true,
+  template: `
+    <div class="progress-wrapper">
+      <div class="progress-bar" [style.width.%]="progressPercent()"></div>
+      <span class="time-label">{{ formattedRemaining() }}</span>
+    </div>
+  `,
+  styles: [`
+    .progress-wrapper {
+      position: relative;
+      width: 100%;
+      height: 22px;
+      background: #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #2563eb;
+      transition: width 0.1s linear; /* Сглаживает шаги обновления */
+    }
+    .time-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+    }
+  `]
+})
+export class BuildingProgressComponent implements OnInit, OnDestroy {
+  @Input({ required: true }) startedAtIso!: string;
+  @Input({ required: true }) finishAtIso!: string;
+  @Input() onComplete?: () => void; // Колбэк для запроса актуального состояния с сервера
+
+  private timeService = inject(ServerTimeService);
+  private ngZone = inject(NgZone);
+  private timerId: number | null = null;
+  private isCompleted = false;
+
+  progressPercent = signal(0);
+  formattedRemaining = signal('');
+
+  ngOnInit(): void {
+    const startMs = new Date(this.startedAtIso).getTime();
+    const finishMs = new Date(this.finishAtIso).getTime();
+    const totalDuration = Math.max(1, finishMs - startMs);
+
+    // Запускаем цикл обновления вне зоны Angular
+    this.ngZone.runOutsideAngular(() => {
+      this.timerId = window.setInterval(() => {
+        const currentServerMs = this.timeService.now();
+        const elapsed = currentServerMs - startMs;
+        const remaining = Math.max(0, finishMs - currentServerMs);
+
+        const percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+
+        // Возвращаемся в зону Angular только для обновления UI
+        this.ngZone.run(() => {
+          this.progressPercent.set(percent);
+          this.formattedRemaining.set(this.formatSeconds(Math.ceil(remaining / 1000)));
+        });
+
+        // Если время вышло — останавливаем таймер и просим сервер подтвердить постройку
+        if (remaining <= 0 && !this.isCompleted) {
+          this.isCompleted = true;
+          this.stopTimer();
+          this.ngZone.run(() => this.onComplete?.());
+        }
+      }, 100); // Обновляем 10 раз в секунду + CSS transition дает 60 FPS
+    });
+  }
+
+  private formatSeconds(totalSec: number): string {
+    if (totalSec <= 0) return 'Завершение...';
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  private stopTimer(): void {
+    if (this.timerId !== null) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.stopTimer();
+  }
+}
+Use code with caution.
+Три важные детали для надежности
+Защита от сетевой задержки (Ping). Когда таймер на клиенте доходит до 00:00, часы клиента и сервера могут расходиться на 50–100 мс. Чтобы Spring Boot не ответил «Стройка еще не закончена», добавьте при вызове onComplete небольшую паузу в 200–300 мс (setTimeout) перед отправкой GET-запроса на синхронизацию планеты.
+Потеря фокуса вкладки браузера. Современные браузеры замедляют setInterval в неактивных вкладках до 1 раза в секунду. Поскольку наш код при каждом тике берет разницу от реального Date.now() + offsetMs, а не просто прибавляет +0.1 секунды, при возврате на вкладку полоска прогресса мгновенно прыгнет на правильное значение без отставания.
+Отрисовка прямо в PixiJS. Если вы захотите рисовать прогресс-бар не в HTML, а прямо поверх здания на сетке PixiJS, используйте ту же формулу (this.timeService.now() - startMs) / totalDuration внутри app.ticker для изменения ширины прямоугольника Graphics.
+Хотите теперь разобрать механику нападения врагов и обороны базы (как проектировать волны атак, расчет боя между флотом и турелями на сервере и визуализацию выстрелов в PixiJS)?
+
+
+
+
+механику нападения врагов и обороны базы
+Для браузерной космической стратегии на стеке Angular + PixiJS + Spring Boot лучше всего разделять боевую систему на две части: сервер всегда рассчитывает итог сражения по строгим формулам (защита от читов), а PixiJS на клиенте красиво проигрывает этот бой как анимацию.
+Ниже описана архитектура такой механики — от планирования атаки в базе данных до отрисовки лазерных лучей на сетке базы.
+1. Как устроить нападения на бэкенде (Spring Boot + PostgreSQL)
+Чтобы сервер не тратил ресурсы на симуляцию полета каждого снаряда в реальном времени, атаки работают через таймеры прибытия и мгновенный расчет раундов боя.
+Планирование атаки (Таблица enemy_attacks). Когда система (или другой игрок) отправляет флот на вашу планету, в базе создается запись со временем прибытия arrival_at (например, через 5 минут) и составом атакующих кораблей (например, 10 истребителей, 2 крейсера).
+Предупреждение игрока. Пока now() < arrival_at, фронтенд получает эту запись в списке угроз и рисует на карте Солнечной системы вражеский маркер, летящий к планете, с обратным отсчетом. У игрока есть время построить турели или перебросить свой флот.
+Момент боя (now() >= arrival_at). Когда время прибытия наступает (это проверяется в том же методе syncPlanetState или по крон-задаче @Scheduled), сервер запускает алгоритм боя:
+Собирает характеристики обороны планеты: все построенные турели (урон, прочность, уровень) + защитный флот на орбите.
+Проводит симуляцию по раундам (обычно 3–6 раундов): в каждом раунде турели и корабли защиты стреляют по атакующим, а атакующие — по турелям и защитникам.
+Сохраняет итог в базу: списывает уничтоженные корабли, снижает уровень (или ломает) поврежденные турели, а в случае поражения защиты — забирает часть ресурсов планеты.
+Записывает лог боя (BattleLog) в виде JSON, чтобы игрок мог посмотреть «повтор» сражения.
+2. Базовая математика боя на Java
+Для первой версии не нужно усложнять формулы — достаточно трех параметров для каждого юнита (корабля или турели): Атака (Attack), Щиты/Броня (Defense) и Прочность (HP).
+java
+public record CombatUnit(String code, int count, double attack, double hp) {}
+
+public class BattleSimulator {
+
+    public BattleResult simulate(List<CombatUnit> attackers, List<CombatUnit> defenders) {
+        double attackerTotalHp = attackers.stream().mapToDouble(u -> u.count() * u.hp()).sum();
+        double defenderTotalHp = defenders.stream().mapToDouble(u -> u.count() * u.hp()).sum();
+
+        double attackerDps = attackers.stream().mapToDouble(u -> u.count() * u.attack()).sum();
+        double defenderDps = defenders.stream().mapToDouble(u -> u.count() * u.attack()).sum();
+
+        // Проводим до 6 раундов обмена залпами
+        for (int round = 1; round <= 6; round++) {
+            if (attackerTotalHp <= 0 || defenderTotalHp <= 0) break;
+
+            // Враги и защита стреляют одновременно
+            defenderTotalHp -= attackerDps;
+            attackerTotalHp -= defenderDps;
+        }
+
+        boolean defendersWon = defenderTotalHp > 0 && attackerTotalHp <= 0;
+        return new BattleResult(defendersWon, Math.max(0, defenderTotalHp), Math.max(0, attackerTotalHp));
+    }
+}
+Use code with caution.
+3. Визуализация обороны в PixiJS (Клиент)
+Когда игрок открывает экран базы во время атаки (или запускает просмотр боевого отчета), PixiJS превращает сухие цифры в зрелищную сцену на вашей сетке 6x6.
+Движение врагов. Вражеские корабли появляются за пределами сетки базы (например, сверху) и в игровом цикле app.ticker плавно летят к центру базы или кружат над постройками.
+Стрельба турелей. Для каждой клетки с турелью на сетке 6x6 вы проверяете расстояние до ближайшего вражеского корабля по теореме Пифагора: Math.hypot(enemy.x - turret.x, enemy.y - turret.y).
+Отрисовка лазера и взрывов. Если враг вошел в радиус действия турели и прошел таймер перезарядки, вы создаете объект new Graphics(), рисуете линию (moveTo -> lineTo) яркого красного или голубого цвета от центра турели к кораблю, добавляете свечение и удаляете эту линию через 100 мс.
+typescript
+// Пример отрисовки лазерного выстрела от турели к кораблю в PixiJS
+function fireLaser(
+  container: Container,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number
+): void {
+  const laser = new Graphics()
+    .moveTo(fromX, fromY)
+    .lineTo(toX, toY)
+    .stroke({ width: 3, color: 0x38bdf8, alpha: 0.9 });
+
+  container.addChild(laser);
+
+  // Удаляем луч через 120 миллисекунд, создавая эффект импульсного выстрела
+  setTimeout(() => {
+    container.removeChild(laser);
+    laser.destroy();
+  }, 120);
+}
+Use code with caution.
+4. Два режима обороны: что выбрать?
+В зависимости от темпа вашей игры можно выбрать один из двух подходов к управлению защитой.
+Подход	Как работает	Плюсы и минусы
+Автоматическая оборона (как в OGame / Clash of Clans)	Игрок заранее расставляет турели на сетке. Враг нападает даже когда игрок оффлайн, бой рассчитывается на сервере, а в игре доступен повтор.	Идеально для браузерной стратегии. Игрок не обязан сидеть в игре 24/7, чтобы не потерять базу.
+Активный Tower Defense в реальном времени	Атака начинается только когда игрок в сети. Враги идут по дорожкам, игрок в реальном времени строит турели и чинит их, а результат отправляется на сервер в конце волны.	Более динамичный геймплей, но сложнее защитить от подмены результатов боя на клиенте.
+Для первой версии игры рекомендуется первый вариант (автоматическая оборона + визуализация боя на клиенте) — он проще в реализации на Spring Boot и отлично сочетается с ленивой экономикой.
+Хотите, чтобы я показал полный цикл жизни одной игровой фичи от БД до экрана (например, постройку космического корабля на верфи: SQL-таблица, REST-контроллер на Spring Boot и отображение корабля на орбите в PixiJS)?
+
+
+
+
+Skip to previous prompt
+Ask anything
+
+
+
+AI Mode response is ready
+Ask aboutCopied to clipboard.

@@ -1,0 +1,35 @@
+@let data = planet();
+
+<section class="ui-panel" aria-labelledby="planet-title">
+  <div class="panel-topline">
+    <span>ОБЪЕКТ / {{ data.name }}</span>
+    <button class="close-button" type="button" (click)="closed.emit()" aria-label="Закрыть панель" title="Закрыть панель">&times;</button>
+  </div>
+  <div class="planet-heading">
+    <span class="eyebrow">ПЛАНЕТАРНАЯ ТЕЛЕМЕТРИЯ</span>
+    <h2 id="planet-title">{{ data.name }}</h2>
+    <span class="class-label">{{ data.athmosphere ? 'АТМОСФЕРА ОБНАРУЖЕНА' : 'БЕЗ АТМОСФЕРЫ' }}</span>
+  </div>
+  <div class="scan-status"><i></i><span>СПЕКТРАЛЬНЫЙ АНАЛИЗ</span><strong>100%</strong></div>
+  <dl class="telemetry">
+    <div><dt>Орбита</dt><dd>{{ data.distanceFromSun }} <small>а.е.</small></dd></div>
+    <div><dt>Период обращения</dt><dd>{{ data.orbitalPeriod }} <small>сут.</small></dd></div>
+    <div><dt>Радиус</dt><dd>{{ data.radius }} <small>км</small></dd></div>
+    <div><dt>Масса</dt><dd>{{ data.mass }} <small>М⊕</small></dd></div>
+    <div><dt>Гравитация</dt><dd>{{ data.gravity }} <small>м/с²</small></dd></div>
+  </dl>
+  <div class="section-label"><span>РЕСУРСНЫЕ СИГНАТУРЫ</span><span>03</span></div>
+  <div class="resource">
+    <div><span>◆ <b>Минералы</b></span><strong>{{ data.resourses.minerals }}%</strong></div>
+    <div class="resource-track"><span [style.width.%]="data.resourses.minerals"></span></div>
+  </div>
+  <div class="resource water">
+    <div><span>H₂O <b>Вода</b></span><strong>{{ data.resourses.water }}%</strong></div>
+    <div class="resource-track"><span [style.width.%]="data.resourses.water"></span></div>
+  </div>
+  <div class="resource">
+    <div><span>◌ <b>Газ</b></span><strong>{{ data.resourses.gas }}%</strong></div>
+    <div class="resource-track"><span [style.width.%]="data.resourses.gas"></span></div>
+  </div>
+  <footer class="panel-footer"><span class="signal-bars">▂▄▆█</span> ТЕЛЕМЕТРИЯ В РЕАЛЬНОМ ВРЕМЕНИ</footer>
+</section>

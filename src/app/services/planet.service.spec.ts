@@ -7,6 +7,7 @@ describe('PlanetService', () => {
     const planets = service.getPlanets();
     expect(planets).toHaveLength(3);
     expect(new Set(planets.map((planet) => planet.name)).size).toBe(3);
+    expect(new Set(planets.map((planet) => planet.id)).size).toBe(3);
     planets.forEach((planet) => {
       expect(planet.radius).toBeGreaterThan(0);
       expect(planet.distanceFromSun).toBeGreaterThan(0);

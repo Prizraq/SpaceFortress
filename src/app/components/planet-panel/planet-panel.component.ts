@@ -10,4 +10,5 @@ import { Planet } from '../../models/interface/planet';
 export class PlanetPanelComponent {
   readonly planet = input.required<Planet>();
   readonly closed = output<void>();
+  readonly opened = output<void>();
 }

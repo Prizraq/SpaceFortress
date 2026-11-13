@@ -1,0 +1,375 @@
+@if (colony(); as colony) {
+  <div class="colony-screen">
+    <header class="colony-header">
+      <button class="back-button" type="button" (click)="back.emit()" title="Вернуться к системе">
+        <app-game-icon name="back" /> К системе
+      </button>
+      <div class="planet-name">
+        <span>КОЛОНИАЛЬНОЕ УПРАВЛЕНИЕ / ГЕЛИОС</span>
+        <h1>{{ planet().name }}</h1>
+      </div>
+      <span class="uplink"><i></i> КАНАЛ АКТИВЕН</span>
+    </header>
+
+    <div class="resource-bar" aria-label="Ресурсы колонии">
+      <div class="credits">
+        <app-game-icon name="credits" /><span>Кредиты <small>ОБЩИЙ СЧЁТ</small></span
+        ><strong data-resource="credits">{{ game.credits() }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="minerals" /><span>Минералы</span
+        ><strong data-resource="minerals">{{ colony.stocks.minerals }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="water" /><span>Вода</span
+        ><strong data-resource="water">{{ colony.stocks.water }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="gas" /><span>Газ</span
+        ><strong data-resource="gas">{{ colony.stocks.gas }}</strong>
+      </div>
+      <div class="energy">
+        <app-game-icon name="power" /><span>Энергия</span
+        ><strong data-resource="energy">{{ colony.stocks.energy }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="housing" /><span>Население</span
+        ><strong data-resource="population">{{ colony.stocks.population }}</strong>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <aside class="catalogue" aria-label="Каталог зданий">
+        <div class="section-heading">
+          <h2>Строительство</h2>
+          <span>06</span>
+        </div>
+        @for (definition of game.catalogue; track definition.type) {
+          @let problem = buildProblem(definition.type);
+          <article
+            class="building-option"
+            [class.chosen]="blueprint() === definition.type || dragging() === definition.type"
+            [attr.draggable]="!problem"
+            (dragstart)="dragStart($event, definition)"
+            (dragend)="dragEnd()"
+          >
+            <div class="building-title">
+              <span class="building-icon" [class]="'building-icon ' + definition.type"
+                ><app-game-icon [name]="definition.type"
+              /></span>
+              <div>
+                <h3>{{ definition.name }}</h3>
+                <span
+                  >{{ definition.buildTime }} с <b> / </b
+                  >{{
+                    definition.production
+                      ? '+' + game.yieldFor(planet(), definition) + ' / 2 с'
+                      : '+' + definition.populationGain + ' населения'
+                  }}</span
+                >
+              </div>
+            </div>
+            <div class="costs" aria-label="Стоимость строительства">
+              <span title="Кредиты"
+                ><app-game-icon name="credits" />{{ definition.costCredits }}</span
+              >
+              <span title="Минералы"
+                ><app-game-icon name="minerals" />{{ definition.costMinerals }}</span
+              >
+              @if (definition.costWater) {
+                <span title="Вода"><app-game-icon name="water" />{{ definition.costWater }}</span>
+              }
+              @if (definition.costGas) {
+                <span title="Газ"><app-game-icon name="gas" />{{ definition.costGas }}</span>
+              }
+              @if (definition.costEnergy) {
+                <span title="Энергия"
+                  ><app-game-icon name="power" />{{ definition.costEnergy }}</span
+                >
+              }
+            </div>
+            <button
+              type="button"
+              class="build-button"
+              [disabled]="!!problem"
+              [title]="problem ?? 'Разместить здание'"
+              (click)="choose(definition)"
+              [attr.aria-label]="'Строить: ' + definition.name"
+            >
+              <app-game-icon name="build" />{{
+                blueprint() === definition.type ? 'Выбрано' : 'Строить'
+              }}
+            </button>
+            @if (problem) {
+              <p class="availability">{{ problem }}</p>
+            }
+          </article>
+        }
+      </aside>
+
+      <main class="surface">
+        <div class="surface-heading">
+          <div>
+            <span class="eyebrow">ПОВЕРХНОСТЬ / СЕКТОР 01</span>
+            <h2>Планетарная сетка</h2>
+          </div>
+          <span
+            >{{ side() }} × {{ side()
+            }}<small
+              >{{ colony.buildings.length }} / {{ geometry().tiles.length }} участков</small
+            ></span
+          >
+        </div>
+        <div class="map-controls">
+          <span class="map-status">{{
+            blueprint() ? game.definition(blueprint()!).name : 'ОРБИТАЛЬНАЯ СЪЁМКА'
+          }}</span>
+          @if (blueprint()) {
+            <button
+              type="button"
+              title="Отменить размещение"
+              aria-label="Отменить размещение"
+              (click)="blueprint.set(null)"
+            >
+              <app-game-icon name="close" />
+            </button>
+          }
+          <div class="zoom-controls">
+            <button
+              type="button"
+              title="Уменьшить карту"
+              aria-label="Уменьшить карту"
+              (click)="changeZoom(-0.2)"
+            >
+              <app-game-icon name="minus" /></button
+            ><button
+              type="button"
+              title="Увеличить карту"
+              aria-label="Увеличить карту"
+              (click)="changeZoom(0.2)"
+            >
+              <app-game-icon name="plus" />
+            </button>
+          </div>
+        </div>
+        <div class="map-scroll" [class.placing]="!!blueprint() || !!dragging()">
+          <svg
+            class="hex-map"
+            [attr.viewBox]="'0 0 ' + geometry().width + ' ' + geometry().height"
+            [style.width.px]="geometry().width * zoom()"
+            role="group"
+            aria-label="Участки планеты"
+          >
+            <defs>
+              <pattern id="surface-noise" width="13" height="17" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="4" r="0.7" fill="#b8dbbd" opacity="0.18" />
+                <path d="M8 11l3-1" stroke="#b8dbbd" opacity="0.16" />
+              </pattern>
+              <symbol id="structure-base" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path d="M15 38V21L30 13L45 21V38L30 47Z" fill="#9fc2be" />
+                <path d="M30 30L45 21V38L30 47Z" fill="#447578" />
+                <path d="M15 21L30 13L45 21L30 30Z" fill="#d5e5ce" />
+                <path
+                  d="M30 13V5M25 5H35M20 33L25 36M34 34L40 31"
+                  stroke="#a3f4e3"
+                  stroke-width="2"
+                />
+              </symbol>
+              <symbol id="structure-power" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path
+                  d="M28 44V16M28 20L40 9M28 20L13 12M28 20L30 4"
+                  stroke="#e9dba4"
+                  stroke-width="3"
+                />
+                <path
+                  d="M7 29L22 23L26 33L11 39ZM33 29L48 23L53 33L38 39Z"
+                  fill="#7bcbd1"
+                  stroke="#c5ede5"
+                />
+                <path d="M9 33L24 27M35 33L50 27" stroke="#356d7a" />
+              </symbol>
+              <symbol id="structure-water" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path d="M13 21V40Q25 49 37 40V21" fill="#579ba5" />
+                <ellipse cx="25" cy="21" rx="12" ry="6" fill="#b3e4df" />
+                <path d="M42 20V38H35M42 20H50V31" fill="none" stroke="#c6dcd0" stroke-width="4" />
+                <path d="M16 33Q25 38 34 33" fill="none" stroke="#a2f1e8" />
+              </symbol>
+              <symbol id="structure-minerals" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path
+                  d="M13 39L25 10L39 39M18 29H34M21 21H30"
+                  fill="none"
+                  stroke="#d7ba82"
+                  stroke-width="3"
+                />
+                <path
+                  d="M25 10V42M34 33L48 29V41L37 46Z"
+                  fill="#778f87"
+                  stroke="#cfd9be"
+                  stroke-width="2"
+                />
+                <path d="M23 45L30 49L35 44" stroke="#e5c181" stroke-width="3" />
+              </symbol>
+              <symbol id="structure-gas" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path
+                  d="M13 37V14H23V42M30 43V7H40V37M40 30H49V40"
+                  fill="#8ab5b5"
+                  stroke="#d3dfce"
+                  stroke-width="2"
+                />
+                <path d="M11 24H25M28 18H42" stroke="#6fe0cc" stroke-width="3" />
+              </symbol>
+              <symbol id="structure-housing" viewBox="0 0 60 60">
+                <path d="M4 40L30 26L56 40L30 55Z" fill="#294d50" />
+                <path d="M10 40V24L23 17L36 24V40L23 47Z" fill="#97b3a5" />
+                <path d="M29 36V17L41 10L52 17V36L41 43Z" fill="#b1c6b0" />
+                <path d="M41 24L52 17V36L41 43ZM23 31L36 24V40L23 47Z" fill="#4b7976" />
+                <path
+                  d="M15 30L19 32M15 36L19 38M34 23L38 25M34 30L38 32M44 28L48 26"
+                  stroke="#a4f3d9"
+                  stroke-width="2"
+                />
+              </symbol>
+            </defs>
+            @for (tile of geometry().tiles; track tile.id) {
+              @let building = tileBuildings().get(tile.id);
+              <g
+                class="hex-tile"
+                [class.selected]="selectedTile() === tile.id"
+                [class.occupied]="!!building"
+                [class.constructing]="building && !building.completed"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="
+                  building
+                    ? game.definition(building.type).name + ', участок ' + (tile.id + 1)
+                    : 'Участок ' + (tile.id + 1)
+                "
+                (click)="selectTile(tile.id)"
+                (keydown.enter)="selectTile(tile.id)"
+                (keydown.space)="$event.preventDefault(); selectTile(tile.id)"
+                (dragover)="allowDrop($event)"
+                (drop)="drop($event, tile.id)"
+                [attr.data-tile]="tile.id"
+              >
+                <polygon [attr.points]="tile.points" [attr.fill]="terrain(tile.id)" />
+                <polygon class="texture" [attr.points]="tile.points" fill="url(#surface-noise)" />
+                @if (building) {
+                  <use
+                    [attr.href]="'#structure-' + building.type"
+                    [attr.x]="tile.x - 26"
+                    [attr.y]="tile.y - 30"
+                    width="52"
+                    height="52"
+                  />
+                  <text [attr.x]="tile.x" [attr.y]="tile.y + 24" text-anchor="middle">
+                    {{
+                      building.completed
+                        ? game.definition(building.type).code
+                        : progress(building) + '%'
+                    }}
+                  </text>
+                } @else {
+                  <text
+                    class="tile-number"
+                    [attr.x]="tile.x"
+                    [attr.y]="tile.y + 3"
+                    text-anchor="middle"
+                  >
+                    {{ tile.id + 1 }}
+                  </text>
+                }
+              </g>
+            }
+          </svg>
+        </div>
+        <div class="surface-footer">
+          <span>{{ planet().radius }} КМ / РАДИУС</span
+          ><span>{{ colony.buildings.length }} ПОСТРОЕК</span><span>ЦИКЛ: 2 С</span>
+        </div>
+        <p class="action-message" role="status">{{ message() }}</p>
+      </main>
+
+      <aside class="inspector" aria-label="Информация об участке">
+        <div class="section-heading">
+          <h2>{{ selectedTile() === null ? 'Планета' : 'Участок ' + (selectedTile()! + 1) }}</h2>
+          <span>01</span>
+        </div>
+        @if (inspected(); as building) {
+          @let definition = game.definition(building.type);
+          <div class="inspection-icon" [class]="'inspection-icon ' + building.type">
+            <app-game-icon [name]="building.type" />
+          </div>
+          <span class="eyebrow">{{ building.completed ? 'ОБЪЕКТ КОЛОНИИ' : 'СТРОИТЕЛЬСТВО' }}</span>
+          <h3>{{ definition.name }}</h3>
+          <p>{{ definition.overview }}</p>
+          <dl>
+            <div>
+              <dt>Состояние</dt>
+              <dd>{{ statusLabels[building.status] }}</dd>
+            </div>
+            @if (!building.completed) {
+              <div>
+                <dt>До завершения</dt>
+                <dd>{{ remaining(building) }} с</dd>
+              </div>
+            }
+            @if (definition.production) {
+              <div>
+                <dt>Производство / 2 с</dt>
+                <dd>+{{ game.yieldFor(planet(), definition) }}</dd>
+              </div>
+              <div>
+                <dt>Энергия / 2 с</dt>
+                <dd>−{{ definition.energyUse }}</dd>
+              </div>
+            }
+            @if (definition.populationGain) {
+              <div>
+                <dt>Население</dt>
+                <dd>+{{ definition.populationGain }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Время постройки</dt>
+              <dd>{{ definition.buildTime }} с</dd>
+            </div>
+          </dl>
+          @if (!building.completed) {
+            <div class="construction-progress">
+              <span [style.width.%]="progress(building)"></span>
+            </div>
+          }
+        } @else {
+          <div class="inspection-icon"><app-game-icon name="base" /></div>
+          <span class="eyebrow">{{
+            selectedTile() === null ? 'РЕСУРСНЫЙ ПОТЕНЦИАЛ' : 'НЕОСВОЕННАЯ ТЕРРИТОРИЯ'
+          }}</span>
+          <h3>{{ selectedTile() === null ? planet().name : 'Свободный участок' }}</h3>
+          <dl>
+            <div>
+              <dt>Минеральные запасы</dt>
+              <dd>{{ colony.deposits.minerals }}</dd>
+            </div>
+            <div>
+              <dt>Газовые запасы</dt>
+              <dd>{{ colony.deposits.gas }}</dd>
+            </div>
+            <div>
+              <dt>Содержание воды</dt>
+              <dd>{{ planet().resourses.water }}%</dd>
+            </div>
+            <div>
+              <dt>Атмосфера</dt>
+              <dd>{{ planet().athmosphere ? 'Есть' : 'Нет' }}</dd>
+            </div>
+          </dl>
+        }
+      </aside>
+    </div>
+  </div>
+}

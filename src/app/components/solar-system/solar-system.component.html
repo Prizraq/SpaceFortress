@@ -1,4 +1,4 @@
-<div class="game-wrapper">
+<div class="game-wrapper" [hidden]="!!surfacePlanet()">
   <header class="map-header">
     <div><span class="eyebrow">НАВИГАЦИОННЫЙ КОМПЛЕКС / 01</span><h1>Система Гелиос</h1></div>
     <span class="connection"><i></i> СВЯЗЬ УСТАНОВЛЕНА</span>
@@ -6,7 +6,7 @@
 
   <div #pixiContainer class="canvas-container" role="img" aria-label="Голографическая карта звезды Гелиос и трёх планет"></div>
   <div class="planet-picker" aria-label="Планеты системы">
-    @for (planet of planets; track planet.name) {
+    @for (planet of planets; track planet.id) {
       <button class="planet-target" type="button" (click)="selectPlanet(planet)" [attr.aria-label]="'Выбрать планету ' + planet.name" [attr.aria-pressed]="selectedPlanet() === planet">
         <span class="target-dot"></span> {{ planet.name }} <span class="target-code">0{{ $index + 1 }}</span>
       </button>
@@ -17,8 +17,15 @@
   }
 
   @if (selectedPlanet(); as planet) {
-    <app-planet-panel class="planet-panel" [planet]="planet" (closed)="closePanel()" />
+    <app-planet-panel class="planet-panel" [planet]="planet" (closed)="closePanel()" (opened)="openPlanet(planet)" />
   }
 
-  <footer class="map-footer"><span><i></i> ОРБИТАЛЬНАЯ ПРОЕКЦИЯ</span><span>ГЕЛИОС <b> / </b> СЕКТОР 001</span></footer>
+  <footer class="map-footer">
+    <span><i></i> ОРБИТАЛЬНАЯ ПРОЕКЦИЯ</span>
+    <span>ГЕЛИОС <b> / </b> СЕКТОР 001</span>
+  </footer>
 </div>
+
+@if (surfacePlanet(); as planet) {
+  <app-planet-map [planet]="planet" (back)="returnToSystem()" />
+}

@@ -10,6 +10,7 @@
     <h2 id="planet-title">{{ data.name }}</h2>
     <span class="class-label">{{ data.athmosphere ? 'АТМОСФЕРА ОБНАРУЖЕНА' : 'БЕЗ АТМОСФЕРЫ' }}</span>
   </div>
+  <button class="open-surface" type="button" (click)="opened.emit()">Открыть поверхность</button>
   <div class="scan-status"><i></i><span>СПЕКТРАЛЬНЫЙ АНАЛИЗ</span><strong>100%</strong></div>
   <dl class="telemetry">
     <div><dt>Орбита</dt><dd>{{ data.distanceFromSun }} <small>а.е.</small></dd></div>

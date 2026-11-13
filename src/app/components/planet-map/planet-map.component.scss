@@ -1,0 +1,485 @@
+:host {
+  display: block;
+  color: #e0eeea;
+  font:
+    13px 'Bahnschrift',
+    'Trebuchet MS',
+    sans-serif;
+  --line: #8bc6bf24;
+  --muted: #8baba6;
+  --accent: #8ad9cb;
+}
+* {
+  box-sizing: border-box;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+button:focus-visible,
+.hex-tile:focus-visible {
+  outline: 2px solid #efcc81;
+  outline-offset: 3px;
+}
+.colony-screen {
+  min-height: 100dvh;
+  background: #0a1315;
+}
+.colony-header {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-height: 82px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  padding: 10px 0;
+  white-space: nowrap;
+}
+.planet-name span,
+.eyebrow,
+.uplink,
+.section-heading > span {
+  font:
+    9px 'Consolas',
+    monospace;
+  color: var(--muted);
+}
+h1 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 400;
+}
+.uplink {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--accent);
+}
+.uplink i {
+  display: inline-block;
+  height: 5px;
+  width: 5px;
+  margin-right: 7px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.resource-bar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+  background: #101f21;
+}
+.resource-bar > div {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 4px 10px;
+  padding: 13px 20px;
+  border-right: 1px solid var(--line);
+}
+.resource-bar app-game-icon {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--accent);
+}
+.resource-bar span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.resource-bar strong {
+  font:
+    22px 'Consolas',
+    monospace;
+  font-weight: 400;
+}
+.resource-bar small {
+  display: inline-block;
+  font:
+    7px 'Consolas',
+    monospace;
+  color: #d7bc82;
+}
+.resource-bar .credits strong,
+.resource-bar .credits app-game-icon,
+.resource-bar .energy app-game-icon {
+  color: #e8c988;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 252px;
+  height: calc(100dvh - 163px);
+  min-height: 550px;
+}
+.catalogue,
+.inspector {
+  padding: 20px;
+  overflow-y: auto;
+  background: #0d191c;
+}
+.catalogue {
+  border-right: 1px solid var(--line);
+}
+.inspector {
+  border-left: 1px solid var(--line);
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 400;
+  margin: 0;
+}
+.building-option {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.building-option.chosen {
+  border-top-color: var(--accent);
+}
+.building-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.building-title h3 {
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0 0 6px;
+}
+.building-title span {
+  font:
+    9px 'Consolas',
+    monospace;
+  color: var(--muted);
+}
+.building-title b {
+  color: #d7bc82;
+  font-weight: normal;
+}
+.building-icon,
+.inspection-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #8ad9cb38;
+  color: var(--accent);
+  background: #8ad9cb09;
+  flex-shrink: 0;
+}
+.power,
+.minerals {
+  color: #e8c988;
+}
+.water {
+  color: #88d5e6;
+}
+.housing {
+  color: #afd89c;
+}
+.costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+  font:
+    10px 'Consolas',
+    monospace;
+  color: #c4d2c8;
+}
+.costs span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.costs app-game-icon {
+  transform: scale(0.75);
+  width: 14px;
+  flex-basis: 14px;
+}
+.build-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 32px;
+  width: 100%;
+  background: #8ad9cb0b;
+  color: var(--accent);
+  border: 1px solid #8ad9cb45;
+  border-radius: 2px;
+  font-size: 11px;
+}
+.build-button:not(:disabled):hover {
+  background: #8ad9cb20;
+}
+.availability {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.surface {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 22px 24px 12px;
+  background:
+    radial-gradient(ellipse at 50% 40%, #18342f60, transparent 70%),
+    repeating-linear-gradient(90deg, transparent 0, transparent 79px, #85bda705 80px);
+}
+.surface-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.surface-heading h2 {
+  margin-top: 8px;
+  font-size: 19px;
+}
+.surface-heading > span {
+  font:
+    20px 'Consolas',
+    monospace;
+  text-align: right;
+  color: #adc4b7;
+}
+.surface-heading small {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.map-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-top: 10px;
+}
+.map-controls button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  background: #0d1d1c;
+  color: var(--accent);
+}
+.map-status {
+  font:
+    9px 'Consolas',
+    monospace;
+  color: #cfbc8e;
+}
+.zoom-controls {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.map-scroll {
+  flex: 1;
+  min-height: 220px;
+  overflow: auto;
+}
+.hex-map {
+  display: block;
+  max-width: none;
+  margin: 12px auto;
+}
+.hex-tile {
+  cursor: pointer;
+}
+.hex-tile polygon {
+  stroke: #77aa9550;
+  stroke-width: 0.8;
+}
+.hex-tile .texture {
+  stroke: none;
+  pointer-events: none;
+}
+.hex-tile text {
+  fill: #b0ddd0;
+  font:
+    8px 'Consolas',
+    monospace;
+  pointer-events: none;
+}
+.hex-tile use {
+  pointer-events: none;
+}
+.hex-tile .tile-number {
+  fill: #9dc1af38;
+  font-size: 7px;
+}
+.hex-tile:hover > polygon:first-child,
+.hex-tile:focus-visible > polygon:first-child {
+  fill: #50766b;
+  stroke: #abebd7;
+  stroke-width: 2;
+}
+.hex-tile.selected > polygon:first-child {
+  stroke: #f0cc81;
+  stroke-width: 2;
+}
+.hex-tile.constructing > polygon:first-child {
+  stroke: #e9c483;
+  stroke-dasharray: 4 3;
+}
+.placing .hex-tile:not(.occupied) {
+  cursor: crosshair;
+}
+.surface-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font:
+    8px 'Consolas',
+    monospace;
+}
+.action-message {
+  min-height: 18px;
+  margin: 10px 0 0;
+  color: #e3c88e;
+  font-size: 12px;
+}
+.inspection-icon {
+  margin: 16px 0 24px;
+  width: 48px;
+  height: 48px;
+}
+.inspector h3 {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 8px 0 16px;
+  overflow-wrap: anywhere;
+}
+.inspector p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+dl {
+  display: grid;
+  gap: 14px;
+  margin-top: 26px;
+}
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+dt {
+  color: var(--muted);
+}
+dd {
+  margin: 0;
+  text-align: right;
+  color: #cfddca;
+}
+.construction-progress {
+  height: 3px;
+  background: #ffffff10;
+  margin-top: 20px;
+}
+.construction-progress span {
+  display: block;
+  height: 100%;
+  background: #e8c988;
+}
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 240px minmax(0, 1fr);
+    height: auto;
+  }
+  .surface {
+    min-height: 650px;
+  }
+  .inspector {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+  }
+  .inspector dl {
+    max-width: 500px;
+  }
+}
+@media (max-width: 700px) {
+  .colony-header {
+    padding: 12px 16px;
+    gap: 18px;
+  }
+  .planet-name span {
+    font-size: 7px;
+  }
+  h1 {
+    font-size: 21px;
+  }
+  .uplink {
+    display: none;
+  }
+  .resource-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .resource-bar > div {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    gap: 4px 6px;
+  }
+  .resource-bar strong {
+    font-size: 19px;
+  }
+  .resource-bar small {
+    display: block;
+  }
+  .workspace {
+    display: flex;
+    flex-direction: column;
+  }
+  .catalogue {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .catalogue > .section-heading {
+    display: none;
+  }
+  .building-option {
+    flex: 0 0 210px;
+    padding: 0;
+    border: 0;
+  }
+  .surface {
+    min-height: 560px;
+    padding: 18px 16px 12px;
+  }
+  .map-scroll {
+    height: 370px;
+    flex: auto;
+  }
+  .inspector {
+    padding: 20px 16px;
+  }
+}

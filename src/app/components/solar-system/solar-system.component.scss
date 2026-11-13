@@ -30,7 +30,7 @@ i, .target-dot { display: inline-block; width: 5px; height: 5px; margin-right: 8
 .render-error { position: absolute; top: 45%; left: 16px; right: 16px; text-align: center; color: #dfbd7f; }
 .planet-target:hover { background: #163033; }
 button:focus-visible { outline: 2px solid #f1c979; outline-offset: 4px; }
-.planet-panel { position: absolute; z-index: 2; top: 110px; right: 32px; width: 310px; max-width: calc(100% - 32px); }
+.planet-panel { position: absolute; z-index: 2; top: 110px; right: 32px; width: 310px; max-width: calc(100% - 32px); max-height: calc(100% - 180px); overflow-y: auto; overscroll-behavior: contain; }
 @media (max-width: 700px) {
   .game-wrapper { min-height: 740px; }
   .map-header, .map-footer { left: 16px; right: 16px; }
@@ -40,6 +40,6 @@ button:focus-visible { outline: 2px solid #f1c979; outline-offset: 4px; }
   .planet-target { left: 16px; top: 94px; }
   .planet-picker { left: 16px; top: 94px; gap: 4px; }
   .planet-picker .planet-target { min-height: 32px; padding: 6px 8px; font-size: 10px; }
-  .planet-panel { top: auto; bottom: 65px; right: 16px; width: 280px; }
+  .planet-panel { top: auto; bottom: 65px; right: 16px; width: 280px; max-height: calc(100% - 160px); }
   .map-footer { font-size: 8px; bottom: 20px; }
 }

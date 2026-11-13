@@ -1,6 +1,7 @@
-import { PlanetResourses } from "./planet-resourses";
+import { PlanetResourses } from './planet-resourses';
 
 export interface Planet {
+  readonly id: string;
   name: string;
   radius: number;
   distanceFromSun: number;

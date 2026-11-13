@@ -1,13 +1,23 @@
-import { AfterViewInit, Component, ElementRef, inject, NgZone, OnDestroy, signal, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  inject,
+  NgZone,
+  OnDestroy,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { Planet } from '../../models/interface/planet';
 import { PlanetService } from '../../services/planet.service';
 import { SolarSystemRendererService } from '../../services/solar-system-renderer.service';
 import { PlanetPanelComponent } from '../planet-panel/planet-panel.component';
+import { PlanetMapComponent } from '../planet-map/planet-map.component';
 
 @Component({
   selector: 'app-solar-system',
   standalone: true,
-  imports: [PlanetPanelComponent],
+  imports: [PlanetPanelComponent, PlanetMapComponent],
   templateUrl: './solar-system.component.html',
   styleUrls: ['./solar-system.component.scss'],
   providers: [SolarSystemRendererService],
@@ -23,7 +33,7 @@ export class SolarSystemComponent implements AfterViewInit, OnDestroy {
   readonly planets = this.planetService.getPlanets();
   readonly selectedPlanet = signal<Planet | null>(null);
   readonly renderError = signal(false);
-
+  readonly surfacePlanet = signal<Planet | null>(null);
   ngAfterViewInit(): void {
     this.ngZone.runOutsideAngular(() => {
       void this.initPixi().catch(() => this.ngZone.run(() => this.renderError.set(true)));
@@ -31,9 +41,27 @@ export class SolarSystemComponent implements AfterViewInit, OnDestroy {
   }
 
   private initPixi(): Promise<void> {
-    return this.renderer.init(this.pixiContainer.nativeElement, this.planets, (planet) => {
-      this.ngZone.run(() => this.selectPlanet(planet));
-    });
+    return this.renderer.init(
+      this.pixiContainer.nativeElement,
+      this.planets,
+      (planet) => {
+        this.ngZone.run(() => this.selectPlanet(planet));
+      },
+      (planet) => {
+        this.ngZone.run(() => this.openPlanet(planet));
+      },
+    );
+  }
+
+  openPlanet(planet: Planet): void {
+    this.selectPlanet(planet);
+    this.surfacePlanet.set(planet);
+    this.renderer.setPaused(true);
+  }
+
+  returnToSystem(): void {
+    this.surfacePlanet.set(null);
+    this.renderer.setPaused(false);
   }
 
   selectPlanet(planet: Planet): void {

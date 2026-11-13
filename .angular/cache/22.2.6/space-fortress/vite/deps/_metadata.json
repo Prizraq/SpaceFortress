@@ -1,0 +1,114 @@
+{
+  "hash": "beaa4169",
+  "configHash": "f24edc53",
+  "lockfileHash": "1010809c",
+  "browserHash": "61f454ee",
+  "optimized": {
+    "@angular/core": {
+      "src": "../../../../../../node_modules/@angular/core/fesm2022/core.mjs",
+      "file": "@angular_core.js",
+      "fileHash": "cd2cb175",
+      "needsInterop": false
+    },
+    "@angular/platform-browser": {
+      "src": "../../../../../../node_modules/@angular/platform-browser/fesm2022/platform-browser.mjs",
+      "file": "@angular_platform-browser.js",
+      "fileHash": "758d00ed",
+      "needsInterop": false
+    },
+    "@angular/router": {
+      "src": "../../../../../../node_modules/@angular/router/fesm2022/router.mjs",
+      "file": "@angular_router.js",
+      "fileHash": "d4f15f31",
+      "needsInterop": false
+    },
+    "honeycomb-grid": {
+      "src": "../../../../../../node_modules/honeycomb-grid/dist/honeycomb-grid.mjs",
+      "file": "honeycomb-grid.js",
+      "fileHash": "bdaeeb06",
+      "needsInterop": false
+    },
+    "lucide": {
+      "src": "../../../../../../node_modules/lucide/dist/esm/lucide.mjs",
+      "file": "lucide.js",
+      "fileHash": "eaf8775d",
+      "needsInterop": false
+    },
+    "pixi.js": {
+      "src": "../../../../../../node_modules/pixi.js/lib/index.mjs",
+      "file": "pixi__js.js",
+      "fileHash": "65c83021",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "Cache-CyVldTiy": {
+      "file": "Cache-CyVldTiy.js",
+      "isDynamicEntry": false
+    },
+    "CanvasPool-Mrw3ve4-": {
+      "file": "CanvasPool-Mrw3ve4-.js",
+      "isDynamicEntry": false
+    },
+    "FederatedEventTarget-CuyNvhv0": {
+      "file": "FederatedEventTarget-CuyNvhv0.js",
+      "isDynamicEntry": false
+    },
+    "Filter-x-mhKRb5": {
+      "file": "Filter-x-mhKRb5.js",
+      "isDynamicEntry": false
+    },
+    "FilterSystem-B77rqS38": {
+      "file": "FilterSystem-B77rqS38.js",
+      "isDynamicEntry": false
+    },
+    "GCManagedHash-EuOgP3HI": {
+      "file": "GCManagedHash-EuOgP3HI.js",
+      "isDynamicEntry": false
+    },
+    "GraphicsContext-DPZJ7H8x": {
+      "file": "GraphicsContext-DPZJ7H8x.js",
+      "isDynamicEntry": false
+    },
+    "RenderTargetSystem-pKjtOWOR": {
+      "file": "RenderTargetSystem-pKjtOWOR.js",
+      "isDynamicEntry": false
+    },
+    "browserAll-cP-wbUSD": {
+      "file": "browserAll-cP-wbUSD.js",
+      "isDynamicEntry": true
+    },
+    "canvasUtils-CBkO-sfK": {
+      "file": "canvasUtils-CBkO-sfK.js",
+      "isDynamicEntry": false
+    },
+    "core-yNoSG1rH": {
+      "file": "core-yNoSG1rH.js",
+      "isDynamicEntry": false
+    },
+    "getTexelRangeRects-Bv0OAHHe": {
+      "file": "getTexelRangeRects-Bv0OAHHe.js",
+      "isDynamicEntry": false
+    },
+    "getTextureBatchBindGroup-DEOGU4zy": {
+      "file": "getTextureBatchBindGroup-DEOGU4zy.js",
+      "isDynamicEntry": false
+    },
+    "init-BVtMKcrP": {
+      "file": "init-BVtMKcrP.js",
+      "isDynamicEntry": false
+    },
+    "platform-browser-DNPIWzWs": {
+      "file": "platform-browser-DNPIWzWs.js",
+      "isDynamicEntry": false
+    },
+    "rolldown-runtime-SbdDWaPq": {
+      "file": "rolldown-runtime-SbdDWaPq.js",
+      "isDynamicEntry": false
+    },
+    "webworkerAll-Q6r6n_vR": {
+      "file": "webworkerAll-Q6r6n_vR.js",
+      "isDynamicEntry": true
+    }
+  }
+}

@@ -39,6 +39,8 @@ dd small { color: var(--muted); }
 .water .resource-track span { background: var(--cyan); }
 .panel-footer { display: flex; align-items: center; gap: 10px; margin-top: 24px; padding: 16px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
 .signal-bars { color: #a0d4b0; }
+.open-surface { width: 100%; margin-bottom: 20px; min-height: 38px; border: 1px solid #79e7ec60; border-radius: 2px; background: #79e7ec12; color: var(--cyan); cursor: pointer; }
+.open-surface:hover { background: #79e7ec24; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 700px) {
   .ui-panel { padding: 0 18px; }

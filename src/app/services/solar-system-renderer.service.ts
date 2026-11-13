@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Application, Circle, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { Planet } from '../models/interface/planet';
+import { createPlanetPixels } from './planet-texture';
 
 interface PlanetView {
   data: Planet;
@@ -17,32 +18,69 @@ export class SolarSystemRendererService {
   private destroyed = false;
   private textures: Texture[] = [];
   private selectedPlanet: Planet | null = null;
-
-  async init(host: HTMLDivElement, planets: readonly Planet[], onSelect: (planet: Planet) => void): Promise<void> {
+  private paused = false;
+  private initializing = false;
+  async init(
+    host: HTMLDivElement,
+    planets: readonly Planet[],
+    onSelect: (planet: Planet) => void,
+    onOpen: (planet: Planet) => void = onSelect,
+  ): Promise<void> {
+    if (this.destroyed) return;
+    if (this.initializing || this.app) throw new Error('Renderer is already initialized');
+    this.initializing = true;
     const app = new Application();
-    await app.init({
-      resizeTo: host,
-      backgroundColor: 0x060c0e,
-      antialias: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
-      autoDensity: true,
-    });
-    if (this.destroyed) {
-      app.destroy(true, { children: true });
-      return;
+    let initialized = false;
+    try {
+      await app.init({
+        backgroundColor: 0x060c0e,
+        antialias: true,
+        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        autoDensity: true,
+        autoStart: false,
+      });
+      initialized = true;
+      if (this.destroyed) return;
+      app.resizeTo = host;
+      host.appendChild(app.canvas);
+      app.canvas.style.display = 'block';
+      this.createScene(app, planets, onSelect, onOpen);
+      if (!this.paused) app.start();
+      this.app = app;
+    } finally {
+      this.initializing = false;
+      if (this.app !== app) this.releaseApplication(app, initialized);
     }
-    this.app = app;
-    host.appendChild(app.canvas);
-    app.canvas.style.display = 'block';
+  }
 
-    const stars = this.createStars();
-    const scene = new Container();
+  private createScene(
+    app: Application,
+    planets: readonly Planet[],
+    onSelect: (planet: Planet) => void,
+    onOpen: (planet: Planet) => void,
+  ): void {
+    const stars = this.createStars(app.stage);
+    const scene = app.stage.addChild(new Container());
     const maxDistance = Math.max(1, ...planets.map((planet) => planet.distanceFromSun));
-    const views = planets.map((planet, index) => this.createPlanet(planet, index, maxDistance, onSelect));
-    scene.addChild(this.createGrid(), this.createOrbits(views), this.createSun());
-    views.forEach((view) => scene.addChild(view.container, view.label));
-    app.stage.addChild(stars, scene);
+    this.createGrid(scene);
+    this.createOrbits(
+      scene,
+      planets.map((planet) => (planet.distanceFromSun / maxDistance) * 300),
+    );
+    this.createSun(scene);
+    const views = planets.map((planet, index) =>
+      this.createPlanet(scene, planet, index, maxDistance, onSelect, onOpen),
+    );
     this.startAnimation(app, scene, stars, views);
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) this.app?.stop();
+    else {
+      this.app?.resize();
+      this.app?.start();
+    }
   }
 
   selectPlanet(planet: Planet | null): void {
@@ -51,26 +89,48 @@ export class SolarSystemRendererService {
 
   destroy(): void {
     this.destroyed = true;
-    this.app?.destroy(true, { children: true });
+    const app = this.app;
     this.app = null;
-    this.textures.forEach((texture) => texture.destroy(true));
-    this.textures = [];
+    if (app) this.releaseApplication(app, true);
     this.selectedPlanet = null;
   }
 
-  private createStars(): Graphics {
-    const stars = new Graphics();
+  private releaseApplication(app: Application, initialized: boolean): void {
+    try {
+      if (initialized) {
+        app.destroy(true, { children: true });
+      } else {
+        try {
+          app.ticker?.destroy();
+        } finally {
+          try {
+            app.stage.destroy({ children: true });
+          } finally {
+            app.renderer?.destroy(true);
+          }
+        }
+      }
+    } finally {
+      const textures = this.textures;
+      this.textures = [];
+      textures.forEach((texture) => texture.destroy(true));
+    }
+  }
+
+  private createStars(parent: Container): Graphics {
+    const stars = parent.addChild(new Graphics());
     for (let index = 0; index < 220; index++) {
-      const horizontal = ((Math.sin(index * 127.1 + 4) * 43758.5453) % 1 + 1) % 1;
-      const vertical = ((Math.sin(index * 311.7 + 7) * 22578.1459) % 1 + 1) % 1;
-      stars.circle(horizontal * 2000, vertical * 1400, index % 9 === 0 ? 1.1 : 0.55)
+      const horizontal = (((Math.sin(index * 127.1 + 4) * 43758.5453) % 1) + 1) % 1;
+      const vertical = (((Math.sin(index * 311.7 + 7) * 22578.1459) % 1) + 1) % 1;
+      stars
+        .circle(horizontal * 2000, vertical * 1400, index % 9 === 0 ? 1.1 : 0.55)
         .fill({ color: index % 5 === 0 ? 0xf0cd91 : 0xb7d2d3, alpha: 0.15 + (index % 4) * 0.12 });
     }
     return stars;
   }
 
-  private createGrid(): Graphics {
-    const grid = new Graphics();
+  private createGrid(parent: Container): Graphics {
+    const grid = parent.addChild(new Graphics());
     for (let coordinate = -480; coordinate <= 480; coordinate += 40) {
       grid.moveTo(coordinate, -360).lineTo(coordinate, 360);
       grid.moveTo(-480, coordinate).lineTo(480, coordinate);
@@ -78,39 +138,56 @@ export class SolarSystemRendererService {
     return grid.stroke({ width: 0.5, color: 0x79e7ec, alpha: 0.055 });
   }
 
-  private createOrbits(views: readonly PlanetView[]): Graphics {
-    const orbit = new Graphics();
-    views.forEach(({ orbitRadius }) => {
-      orbit.ellipse(0, 0, orbitRadius, orbitRadius * 0.65)
+  private createOrbits(parent: Container, radii: readonly number[]): Graphics {
+    const orbit = parent.addChild(new Graphics());
+    radii.forEach((orbitRadius) => {
+      orbit
+        .ellipse(0, 0, orbitRadius, orbitRadius * 0.65)
         .stroke({ width: 1, color: 0x79e7ec, alpha: 0.2 });
     });
     for (let index = 0; index < 72; index++) {
-      const angle = index * Math.PI / 36;
+      const angle = (index * Math.PI) / 36;
       const length = index % 6 === 0 ? 8 : 3;
-      orbit.moveTo(Math.cos(angle) * 330, Math.sin(angle) * 215)
+      orbit
+        .moveTo(Math.cos(angle) * 330, Math.sin(angle) * 215)
         .lineTo(Math.cos(angle) * (330 + length), Math.sin(angle) * (215 + length * 0.65));
     }
     return orbit.stroke({ width: 1, color: 0x79e7ec, alpha: 0.25 });
   }
 
-  private createSun(): Container {
-    const container = new Container();
-    const sun = new Graphics();
+  private createSun(parent: Container): Container {
+    const container = parent.addChild(new Container());
+    const sun = container.addChild(new Graphics());
     for (let radius = 70; radius > 28; radius -= 3) {
       sun.circle(0, 0, radius).fill({ color: 0xf3b65e, alpha: 0.014 });
     }
-    sun.circle(0, 0, 28).fill(0xf6c776).circle(-5, -5, 21).fill(0xffdb94)
-      .circle(-9, -9, 12).fill({ color: 0xfff0bd, alpha: 0.6 });
-    const label = new Text({ text: 'ГЕЛИОС', style: { fontFamily: 'Consolas, monospace', fontSize: 10, fill: 0xdfbd7f } });
+    sun
+      .circle(0, 0, 28)
+      .fill(0xf6c776)
+      .circle(-5, -5, 21)
+      .fill(0xffdb94)
+      .circle(-9, -9, 12)
+      .fill({ color: 0xfff0bd, alpha: 0.6 });
+    const label = new Text({
+      text: 'ГЕЛИОС',
+      style: { fontFamily: 'Consolas, monospace', fontSize: 10, fill: 0xdfbd7f },
+    });
     label.anchor.set(0.5, 0);
     label.position.set(0, 48);
-    container.addChild(sun, label);
+    container.addChild(label);
     return container;
   }
 
-  private createPlanet(data: Planet, index: number, maxDistance: number, onSelect: (planet: Planet) => void): PlanetView {
-    const container = new Container();
-    const body = new Container();
+  private createPlanet(
+    parent: Container,
+    data: Planet,
+    index: number,
+    maxDistance: number,
+    onSelect: (planet: Planet) => void,
+    onOpen: (planet: Planet) => void,
+  ): PlanetView {
+    const container = parent.addChild(new Container());
+    const body = container.addChild(new Container());
     const size = Math.max(20, Math.min(44, 36 * Math.sqrt(data.radius / 6371)));
     body.scale.set(size / 36);
     container.eventMode = 'static';
@@ -121,16 +198,42 @@ export class SolarSystemRendererService {
     const globe = new Sprite(texture);
     globe.anchor.set(0.5);
     globe.width = globe.height = 72;
-    const reticle = new Graphics().arc(0, 0, 47, -0.5, 0.5).stroke({ width: 1.5, color: 0x79e7ec })
-      .arc(0, 0, 47, Math.PI - 0.5, Math.PI + 0.5).stroke({ width: 1.5, color: 0x79e7ec });
+    const reticle = new Graphics()
+      .arc(0, 0, 47, -0.5, 0.5)
+      .stroke({ width: 1.5, color: 0x79e7ec })
+      .arc(0, 0, 47, Math.PI - 0.5, Math.PI + 0.5)
+      .stroke({ width: 1.5, color: 0x79e7ec });
     reticle.alpha = 0.55;
-    body.addChild(this.createAtmosphere(data.athmosphere), globe, this.createCoordinates(), reticle);
-    container.addChild(body);
+    body.addChild(
+      this.createAtmosphere(data.athmosphere),
+      globe,
+      this.createCoordinates(),
+      reticle,
+    );
     container.on('pointerdown', () => onSelect(data));
-    container.on('pointerover', () => { reticle.alpha = 1; });
-    container.on('pointerout', () => { reticle.alpha = 0.55; });
-    const label = new Text({ text: data.name.toUpperCase(), style: { fontFamily: 'Consolas, monospace', fontSize: 11, fill: 0xa2dbde } });
-    return { data, container, label, reticle, orbitRadius: data.distanceFromSun / maxDistance * 300, angle: -2.6 + index * 1.95 };
+    container.on('pointertap', (event) => {
+      if (event.detail === 2) onOpen(data);
+    });
+    container.on('pointerover', () => {
+      reticle.alpha = 1;
+    });
+    container.on('pointerout', () => {
+      reticle.alpha = 0.55;
+    });
+    const label = new Text({
+      text: data.name.toUpperCase(),
+      style: { fontFamily: 'Consolas, monospace', fontSize: 11, fill: 0xa2dbde },
+    });
+    label.anchor.set(0.5, 0);
+    parent.addChild(label);
+    return {
+      data,
+      container,
+      label,
+      reticle,
+      orbitRadius: (data.distanceFromSun / maxDistance) * 300,
+      angle: -2.6 + index * 1.95,
+    };
   }
 
   private createAtmosphere(visible: boolean): Graphics {
@@ -140,7 +243,9 @@ export class SolarSystemRendererService {
         atmosphere.circle(0, 0, radius).fill({ color: 0x69dce9, alpha: 0.025 });
       }
     }
-    return atmosphere.circle(0, 0, 36).stroke({ width: 1, color: 0x9df4ef, alpha: visible ? 0.8 : 0.25 });
+    return atmosphere
+      .circle(0, 0, 36)
+      .stroke({ width: 1, color: 0x9df4ef, alpha: visible ? 0.8 : 0.25 });
   }
 
   private createCoordinates(): Graphics {
@@ -155,59 +260,49 @@ export class SolarSystemRendererService {
     return coordinates;
   }
 
-  private startAnimation(app: Application, scene: Container, stars: Graphics, views: PlanetView[]): void {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    app.ticker.add((ticker) => {
-      const mobile = app.screen.width <= 700;
-      const scale = Math.min(1.35, (app.screen.width - (mobile ? 32 : 380)) / 760, app.screen.height / 680);
-      scene.scale.set(Math.max(0.35, scale));
-      scene.position.set(app.screen.width * (mobile ? 0.5 : 0.38), app.screen.height * (mobile ? 0.31 : 0.53));
-      stars.scale.set(app.screen.width / 2000, app.screen.height / 1400);
+  private startAnimation(
+    app: Application,
+    scene: Container,
+    stars: Graphics,
+    views: PlanetView[],
+  ): void {
+    let layoutWidth = -1;
+    let layoutHeight = -1;
+    const update = (deltaMS: number) => {
+      const { width, height } = app.screen;
+      if (width !== layoutWidth || height !== layoutHeight) {
+        layoutWidth = width;
+        layoutHeight = height;
+        const mobile = width <= 700;
+        const scale = Math.min(1.35, (width - (mobile ? 32 : 380)) / 760, height / 680);
+        scene.scale.set(Math.max(0.35, scale));
+        scene.position.set(width * (mobile ? 0.5 : 0.38), height * (mobile ? 0.31 : 0.53));
+        stars.scale.set(width / 2000, height / 1400);
+      }
+      const deltaSeconds = Math.max(0, Math.min(deltaMS, 1000 / 30)) / 1000;
       views.forEach((view) => {
-        if (!reducedMotion) view.angle += 0.0007 * ticker.deltaTime * 365 / view.data.orbitalPeriod;
-        view.container.position.set(Math.cos(view.angle) * view.orbitRadius, Math.sin(view.angle) * view.orbitRadius * 0.65);
-        view.label.anchor.set(view.container.x >= 0 ? 1 : 0, view.container.y >= 0 ? 0 : 1);
-        view.label.position.set(view.container.x, view.container.y + (view.container.y >= 0 ? 60 : -60));
-        view.reticle.rotation = reducedMotion ? 0 : view.angle * 3;
+        view.angle += (0.042 * deltaSeconds * 365) / view.data.orbitalPeriod;
+        view.container.position.set(
+          Math.cos(view.angle) * view.orbitRadius,
+          Math.sin(view.angle) * view.orbitRadius * 0.65,
+        );
+        view.label.position.set(view.container.x, view.container.y + 60);
+        view.reticle.rotation = view.angle * 3;
         view.reticle.tint = this.selectedPlanet === view.data ? 0xffd18a : 0x79e7ec;
       });
-    });
+    };
+    update(0);
+    app.ticker.add((ticker) => update(ticker.deltaMS));
   }
 
   private createPlanetTexture(planet: Planet, index: number): Texture {
     const size = 192;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
-    const context = canvas.getContext('2d')!;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas 2D context is unavailable');
     const image = context.createImageData(size, size);
-    for (let row = 0; row < size; row++) {
-      for (let column = 0; column < size; column++) {
-        const horizontal = (column + 0.5 - size / 2) / (size / 2);
-        const vertical = (row + 0.5 - size / 2) / (size / 2);
-        const distance = horizontal * horizontal + vertical * vertical;
-        if (distance > 1) continue;
-        const depth = Math.sqrt(1 - distance);
-        const longitude = Math.atan2(horizontal, depth) + 0.7 + index * 1.3;
-        const latitude = Math.asin(vertical);
-        const terrain = Math.sin(longitude * 3 + Math.sin(latitude * 4))
-          + Math.cos(latitude * 7 - longitude * 2) * 0.6
-          + Math.sin(longitude * 13 + latitude * 11) * 0.18
-          + Math.cos(longitude * 29 - latitude * 23) * 0.08;
-        const land = terrain > planet.resourses.water / 100 - 0.67;
-        const ice = Math.abs(latitude) > 1.15 && planet.resourses.water > 30;
-        const cloud = planet.athmosphere ? Math.pow(Math.max(0, Math.sin(longitude * 8 + latitude * 15 + Math.sin(longitude * 4)) * Math.cos(latitude * 13 - longitude * 6)), 8) * 0.5 : 0;
-        const light = 0.16 + 0.84 * Math.max(0, horizontal * -0.6 + vertical * -0.35 + depth * 0.72);
-        const rim = Math.pow(1 - depth, 3) * (planet.athmosphere ? 0.5 : 0.1);
-        const base = ice ? [172, 214, 209] : land
-          ? planet.resourses.water < 20 ? [145 + terrain * 16, 93 + terrain * 14, 65] : [58 + terrain * 16, 126 + terrain * 14, 111]
-          : [15, 62, 85];
-        const offset = (row * size + column) * 4;
-        image.data[offset] = Math.min(255, (base[0] + cloud * 150) * light + rim * 55);
-        image.data[offset + 1] = Math.min(255, (base[1] + cloud * 150) * light + rim * 150);
-        image.data[offset + 2] = Math.min(255, (base[2] + cloud * 150) * light + rim * 170);
-        image.data[offset + 3] = Math.min(255, (1 - distance) * size * 255);
-      }
-    }
+    image.data.set(createPlanetPixels(planet, index, size));
     context.putImageData(image, 0, 0);
     return Texture.from(canvas);
   }

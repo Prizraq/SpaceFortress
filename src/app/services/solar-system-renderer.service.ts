@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Application, Circle, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { Planet } from '../models/interface/planet';
 import { createPlanetPixels } from './planet-texture';
+import { createSunPixels } from './sun-texture';
 
 interface PlanetView {
   data: Planet;
@@ -157,20 +158,14 @@ export class SolarSystemRendererService {
 
   private createSun(parent: Container): Container {
     const container = parent.addChild(new Container());
-    const sun = container.addChild(new Graphics());
-    for (let radius = 70; radius > 28; radius -= 3) {
-      sun.circle(0, 0, radius).fill({ color: 0xf3b65e, alpha: 0.014 });
-    }
-    sun
-      .circle(0, 0, 28)
-      .fill(0xf6c776)
-      .circle(-5, -5, 21)
-      .fill(0xffdb94)
-      .circle(-9, -9, 12)
-      .fill({ color: 0xfff0bd, alpha: 0.6 });
+    const texture = this.createTexture(createSunPixels(512), 512);
+    this.textures.push(texture);
+    const sun = container.addChild(new Sprite(texture));
+    sun.anchor.set(0.5);
+    sun.width = sun.height = 192;
     const label = new Text({
       text: 'ГЕЛИОС',
-      style: { fontFamily: 'Consolas, monospace', fontSize: 10, fill: 0xdfbd7f },
+      style: { fontFamily: 'Consolas, monospace', fontSize: 10, fill: 0xffe6b2 },
     });
     label.anchor.set(0.5, 0);
     label.position.set(0, 48);
@@ -193,7 +188,7 @@ export class SolarSystemRendererService {
     container.eventMode = 'static';
     container.cursor = 'pointer';
     container.hitArea = new Circle(0, 0, size + 12);
-    const texture = this.createPlanetTexture(data, index);
+    const texture = this.createTexture(createPlanetPixels(data, index, 192), 192);
     this.textures.push(texture);
     const globe = new Sprite(texture);
     globe.anchor.set(0.5);
@@ -295,14 +290,13 @@ export class SolarSystemRendererService {
     app.ticker.add((ticker) => update(ticker.deltaMS));
   }
 
-  private createPlanetTexture(planet: Planet, index: number): Texture {
-    const size = 192;
+  private createTexture(pixels: Uint8ClampedArray, size: number): Texture {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is unavailable');
     const image = context.createImageData(size, size);
-    image.data.set(createPlanetPixels(planet, index, size));
+    image.data.set(pixels);
     context.putImageData(image, 0, 0);
     return Texture.from(canvas);
   }

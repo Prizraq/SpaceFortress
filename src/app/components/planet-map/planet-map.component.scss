@@ -20,8 +20,7 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.4;
 }
-button:focus-visible,
-.hex-tile:focus-visible {
+button:focus-visible {
   outline: 2px solid #efcc81;
   outline-offset: 3px;
 }
@@ -76,7 +75,7 @@ h1 {
 }
 .resource-bar {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
   background: #101f21;
 }
@@ -113,6 +112,25 @@ h1 {
 .resource-bar .credits app-game-icon,
 .resource-bar .energy app-game-icon {
   color: #e8c988;
+}
+.resource-bar .water-deficit {
+  color: #e58b7e;
+}
+.food-surplus {
+  --food-color: #8ad9a0;
+}
+.food-balanced {
+  --food-color: #e8c988;
+}
+.food-deficit {
+  --food-color: #e58b7e;
+}
+.resource-bar .food :is(app-game-icon, span, small, strong) {
+  color: var(--food-color);
+}
+.resource-bar .food .hunger {
+  color: #e58b7e;
+  font-size: 11px;
 }
 .workspace {
   display: grid;
@@ -155,6 +173,9 @@ h2 {
   align-items: center;
   gap: 10px;
 }
+.building-title > div {
+  min-width: 0;
+}
 .building-title h3 {
   font-size: 13px;
   font-weight: 400;
@@ -190,6 +211,19 @@ h2 {
 }
 .housing {
   color: #afd89c;
+}
+.building-icon {
+  width: 64px;
+  height: 48px;
+  border: 0;
+  background: none;
+}
+.building-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 .costs {
   display: flex;
@@ -288,49 +322,75 @@ h2 {
     monospace;
   color: #cfbc8e;
 }
-.zoom-controls {
-  display: flex;
-  gap: 6px;
+.map-hint {
   margin-left: auto;
+  max-width: 180px;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: right;
 }
-.map-scroll {
+.map-viewport {
+  position: relative;
+  background: #000;
   flex: 1;
   min-height: 220px;
-  overflow: auto;
+  overflow: clip;
+  touch-action: none;
+  user-select: none;
+  overscroll-behavior: contain;
+  cursor: grab;
 }
 .hex-map {
+  position: absolute;
+  overflow: visible;
+  left: 50%;
+  top: 50%;
   display: block;
   max-width: none;
-  margin: 12px auto;
 }
 .hex-tile {
   cursor: pointer;
+  outline: none;
 }
 .hex-tile polygon {
-  stroke: #77aa9550;
-  stroke-width: 0.8;
-}
-.hex-tile .texture {
-  stroke: none;
-  pointer-events: none;
+  stroke: #d9eee0aa;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 0.7px #071517);
 }
 .hex-tile text {
   fill: #b0ddd0;
+  paint-order: stroke;
+  stroke: #081719cc;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
   font:
     8px 'Consolas',
     monospace;
   pointer-events: none;
 }
-.hex-tile use {
+.building-sprite {
+  pointer-events: none;
+  filter: drop-shadow(0 2px 2px #071517b3);
+}
+.demolish-button {
+  color: #e58b7e;
+  margin-top: 10px;
+}
+.building-shadow {
+  fill: #07151775;
+  filter: blur(1.5px);
   pointer-events: none;
 }
+.hex-tile.constructing .building-sprite {
+  opacity: 0.55;
+}
 .hex-tile .tile-number {
-  fill: #9dc1af38;
+  fill: #d3e2d675;
   font-size: 7px;
 }
 .hex-tile:hover > polygon:first-child,
 .hex-tile:focus-visible > polygon:first-child {
-  fill: #50766b;
+  fill: #ffffff14;
   stroke: #abebd7;
   stroke-width: 2;
 }
@@ -344,6 +404,10 @@ h2 {
 }
 .placing .hex-tile:not(.occupied) {
   cursor: crosshair;
+}
+.map-viewport.panning,
+.map-viewport.panning .hex-tile {
+  cursor: grabbing;
 }
 .surface-footer {
   display: flex;
@@ -367,6 +431,13 @@ h2 {
   margin: 16px 0 24px;
   width: 48px;
   height: 48px;
+}
+.inspection-art {
+  display: block;
+  width: 100%;
+  height: 150px;
+  margin: 16px 0 24px;
+  object-fit: contain;
 }
 .inspector h3 {
   font-size: 22px;
@@ -409,6 +480,9 @@ dd {
   background: #e8c988;
 }
 @media (max-width: 1100px) {
+  .resource-bar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
   .workspace {
     grid-template-columns: 240px minmax(0, 1fr);
     height: auto;
@@ -475,7 +549,7 @@ dd {
     min-height: 560px;
     padding: 18px 16px 12px;
   }
-  .map-scroll {
+  .map-viewport {
     height: 370px;
     flex: auto;
   }

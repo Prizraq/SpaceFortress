@@ -3,6 +3,7 @@ import { Application as PixiApplication, Text, Texture } from 'pixi.js';
 import { SolarSystemRendererService } from './solar-system-renderer.service';
 import { PlanetService } from './planet.service';
 import { createPlanetPixels } from './planet-texture';
+import { createSunPixels } from './sun-texture';
 
 const mocks = vi.hoisted(() => ({
   applications: [] as PixiApplication[],
@@ -88,6 +89,15 @@ describe('SolarSystemRendererService lifecycle', () => {
   beforeEach(() => {
     mocks.applications.length = 0;
     mocks.initialize.mockReset().mockResolvedValue(undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      createImageData: (width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+      putImageData: vi.fn(),
+    } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
+    vi.mocked(Texture.from)
+      .mockReset()
+      .mockImplementation(() => ({ destroy: vi.fn() }) as unknown as Texture);
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     service = new SolarSystemRendererService();
     host = document.createElement('div');
@@ -141,12 +151,6 @@ describe('SolarSystemRendererService lifecycle', () => {
   });
 
   it('releases a partial scene and owned textures on construction failure', async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      createImageData: (width: number, height: number) => ({
-        data: new Uint8ClampedArray(width * height * 4),
-      }),
-      putImageData: vi.fn(),
-    } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
     const texture = { destroy: vi.fn() };
     const error = new Error('Texture creation failed');
     vi.mocked(Texture.from)
@@ -197,12 +201,6 @@ describe('SolarSystemRendererService lifecycle', () => {
     async (reducedMotion) => {
       vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
       service = new SolarSystemRendererService();
-      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-        createImageData: (width: number, height: number) => ({
-          data: new Uint8ClampedArray(width * height * 4),
-        }),
-        putImageData: vi.fn(),
-      } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
       vi.mocked(Texture.from).mockReturnValue({ destroy: vi.fn() } as unknown as Texture);
       await service.init(host, new PlanetService().getPlanets().slice(0, 1), vi.fn());
       const app = mocks.applications[0];
@@ -250,5 +248,25 @@ describe('SolarSystemRendererService lifecycle', () => {
     expect(pixels[(16 * 32 + 16) * 4 + 2]).toBeGreaterThan(0);
     expect(pixels).toEqual(createPlanetPixels(wet, 1, 32));
     expect(pixels).not.toEqual(createPlanetPixels(dry, 0, 32));
+  });
+
+  it('renders an emissive sun with a bright core and a fading transparent corona', () => {
+    const size = 64;
+    const pixels = createSunPixels(size);
+    const pixel = (x: number, y: number) =>
+      pixels.slice((y * size + x) * 4, (y * size + x) * 4 + 4);
+    expect(pixel(0, 0)[3]).toBe(0);
+    expect(pixel(32, 32)[3]).toBe(255);
+    expect(pixel(32, 32)[1]).toBeGreaterThan(235);
+    expect(pixel(32, 32)[2]).toBeGreaterThan(190);
+    expect(pixel(46, 32)[3]).toBeGreaterThan(pixel(60, 32)[3]);
+    expect(pixel(60, 32)[3]).toBeGreaterThan(0);
+    const quadrants = [pixel(28, 28), pixel(35, 28), pixel(28, 35), pixel(35, 35)];
+    for (const sample of quadrants) {
+      expect(sample[0]).toBe(255);
+      expect(sample[1]).toBeGreaterThan(220);
+      expect(sample[3]).toBe(255);
+    }
+    expect(pixels).toEqual(createSunPixels(size));
   });
 });

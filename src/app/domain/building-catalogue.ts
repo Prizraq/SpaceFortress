@@ -1,106 +1,21 @@
-import { BuildingDefinition, BuildingType } from '../models/interface/colony';
+import { GasMine } from '../models/class/gas-mine';
+import { Farm } from '../models/class/farm';
+import { MainBase } from '../models/class/main-base';
+import { MineralMine } from '../models/class/mineral-mine';
+import { PowerStation } from '../models/class/power-station';
+import { ResidentialComplex } from '../models/class/residential-complex';
+import { WaterStation } from '../models/class/water-station';
+import { BuildingType } from '../models/enum/building-type';
+import { BuildingDefinition } from '../models/interface/building-definition';
 
 const definitions: readonly BuildingDefinition[] = [
-  {
-    type: 'base',
-    code: 'HQ',
-    name: 'Главная база',
-    overview:
-      'Командный центр колонии. Открывает строительство остальных зданий. Одна база на планету.',
-    costCredits: 200,
-    costMinerals: 60,
-    costWater: 20,
-    costGas: 0,
-    costEnergy: 0,
-    buildTime: 4,
-    energyUse: 0,
-    populationGain: 5,
-    production: 'energy',
-    productionAmount: 4,
-  },
-  {
-    type: 'power',
-    code: 'EN',
-    name: 'Энергостанция',
-    overview: 'Солнечный энергетический комплекс. Снабжает промышленность энергией.',
-    costCredits: 100,
-    costMinerals: 40,
-    costWater: 0,
-    costGas: 10,
-    costEnergy: 0,
-    buildTime: 4,
-    energyUse: 0,
-    populationGain: 0,
-    production: 'energy',
-    productionAmount: 16,
-  },
-  {
-    type: 'water',
-    code: 'H₂O',
-    name: 'Водная станция',
-    overview: 'Извлекает и очищает воду. Производительность зависит от содержания воды на планете.',
-    costCredits: 90,
-    costMinerals: 25,
-    costWater: 0,
-    costGas: 5,
-    costEnergy: 5,
-    buildTime: 4,
-    energyUse: 2,
-    populationGain: 0,
-    production: 'water',
-    productionAmount: 12,
-  },
-  {
-    type: 'minerals',
-    code: 'MIN',
-    name: 'Минеральная шахта',
-    overview:
-      'Разрабатывает конечные минеральные запасы планеты. Добыча поступает на склад каждые 2 секунды.',
-    costCredits: 120,
-    costMinerals: 30,
-    costWater: 10,
-    costGas: 0,
-    costEnergy: 5,
-    buildTime: 6,
-    energyUse: 2,
-    populationGain: 0,
-    production: 'minerals',
-    productionAmount: 12,
-  },
-  {
-    type: 'gas',
-    code: 'GAS',
-    name: 'Газовая шахта',
-    overview:
-      'Извлекает газ из месторождений каждые 2 секунды. Останавливается при истощении запасов или нехватке энергии.',
-    costCredits: 120,
-    costMinerals: 35,
-    costWater: 10,
-    costGas: 0,
-    costEnergy: 5,
-    buildTime: 6,
-    energyUse: 3,
-    populationGain: 0,
-    production: 'gas',
-    productionAmount: 12,
-  },
-  {
-    type: 'housing',
-    code: 'HAB',
-    name: 'Жилой комплекс',
-    overview:
-      'Герметичные жилые модули. После завершения строительства население увеличивается на 20 человек.',
-    costCredits: 150,
-    costMinerals: 40,
-    costWater: 30,
-    costGas: 10,
-    costEnergy: 10,
-    buildTime: 6,
-    energyUse: 0,
-    populationGain: 20,
-    production: null,
-    productionAmount: 0,
-  },
+  new MainBase(),
+  new PowerStation(),
+  new WaterStation(),
+  new MineralMine(),
+  new GasMine(),
+  new ResidentialComplex(),
+  new Farm(),
 ];
 
 export const BUILDING_CATALOGUE = Object.freeze(

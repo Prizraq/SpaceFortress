@@ -1,6 +1,7 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { BUILDING_CATALOGUE, BUILDINGS_BY_TYPE } from '../domain/building-catalogue';
 import { buildProblem } from '../domain/building-rules';
+import { demolitionProblem } from '../domain/demolition-rules';
 import {
   advanceColony,
   createColony,
@@ -9,13 +10,13 @@ import {
   productionYield,
   PRODUCTION_INTERVAL_MS,
 } from '../domain/colony-simulation';
-import {
-  BuildError,
-  BuildingDefinition,
-  BuildingType,
-  Colony,
-  PlacedBuilding,
-} from '../models/interface/colony';
+import { BuildError } from '../models/enum/build-error';
+import { BuildingStatus } from '../models/enum/building-status';
+import { BuildingType } from '../models/enum/building-type';
+import { DemolitionError } from '../models/enum/demolition-error';
+import { BuildingDefinition } from '../models/interface/building-definition';
+import { Colony } from '../models/interface/colony';
+import { PlacedBuilding } from '../models/interface/placed-building';
 import { Planet } from '../models/interface/planet';
 
 @Injectable({ providedIn: 'root' })
@@ -60,8 +61,8 @@ export class ColonyService {
     if (problem) return problem;
     const colony = this.colonies()[planet.id];
     if (!Number.isInteger(tile) || tile < 0 || tile >= gridSize(colony.planet.radius) ** 2)
-      return 'invalid-tile';
-    if (colony.buildings.some((building) => building.tile === tile)) return 'occupied';
+      return BuildError.InvalidTile;
+    if (colony.buildings.some((building) => building.tile === tile)) return BuildError.Occupied;
     const definition = this.definition(type);
     const now = this.clock();
     const building: PlacedBuilding = {
@@ -71,20 +72,42 @@ export class ColonyService {
       startedAt: now,
       completesAt: now + definition.buildTime * 1000,
       completed: false,
-      status: 'construction',
+      status: BuildingStatus.Construction,
     };
     const next = freezeColony({
       ...colony,
       stocks: {
         ...colony.stocks,
         minerals: colony.stocks.minerals - definition.costMinerals,
-        water: colony.stocks.water - definition.costWater,
+        water: Math.round((colony.stocks.water - definition.costWater) * 10) / 10,
         gas: colony.stocks.gas - definition.costGas,
         energy: colony.stocks.energy - definition.costEnergy,
       },
       buildings: [...colony.buildings, building],
     });
     this.creditsState.update((credits) => credits - definition.costCredits);
+    this.coloniesState.update((colonies) => Object.freeze({ ...colonies, [planet.id]: next }));
+    return null;
+  }
+
+  demolitionProblem(planet: Planet, buildingId: number): DemolitionError | null {
+    return demolitionProblem(this.colonies()[planet.id], buildingId);
+  }
+
+  demolish(planet: Planet, buildingId: number): DemolitionError | null {
+    this.tick(Date.now());
+    const problem = this.demolitionProblem(planet, buildingId);
+    if (problem) return problem;
+    const colony = this.colonies()[planet.id];
+    const building = colony.buildings.find((building) => building.id === buildingId);
+    if (!building) return DemolitionError.BuildingMissing;
+    const stocks = { ...colony.stocks };
+    this.definition(building.type).demolish(colony.planet, stocks, building.completed);
+    const next = freezeColony({
+      ...colony,
+      stocks,
+      buildings: colony.buildings.filter((placed) => placed.id !== buildingId),
+    });
     this.coloniesState.update((colonies) => Object.freeze({ ...colonies, [planet.id]: next }));
     return null;
   }

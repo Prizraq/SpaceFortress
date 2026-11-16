@@ -1,10 +1,33 @@
-import { Component, OnChanges, computed, inject, input, output, signal } from '@angular/core';
-import { BuildingDefinition, BuildingType, PlacedBuilding } from '../../models/interface/colony';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  OnChanges,
+  OnDestroy,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { foodEconomy, waterEconomy } from '../../domain/colony-simulation';
+import { BuildingType } from '../../models/enum/building-type';
+import { BuildingDefinition } from '../../models/interface/building-definition';
+import { PlacedBuilding } from '../../models/interface/placed-building';
 import { Planet } from '../../models/interface/planet';
 import { ColonyService } from '../../services/colony.service';
 import { GameIconComponent } from '../game-icon/game-icon.component';
-import { BUILD_ERROR_LABELS, BUILDING_STATUS_LABELS } from './building-labels';
-import { createHexMap, terrainColor } from './hex-map';
+import {
+  BUILD_ERROR_LABELS,
+  BUILDING_STATUS_LABELS,
+  DEMOLITION_ERROR_LABELS,
+} from './building-labels';
+import { MAP_VERTICAL_SCALE, createHexMap } from './hex-map';
+import { createSurfaceTexture } from './surface-texture';
+
+const HORIZON_CURVE = 12;
+const SKY_HEIGHT = 24;
 
 @Component({
   selector: 'app-planet-map',
@@ -13,18 +36,52 @@ import { createHexMap, terrainColor } from './hex-map';
   templateUrl: './planet-map.component.html',
   styleUrls: ['./planet-map.component.scss'],
 })
-export class PlanetMapComponent implements OnChanges {
+export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
+  private static nextSurfaceId = 0;
+  readonly surfacePatternId = `planet-surface-${PlanetMapComponent.nextSurfaceId++}`;
   readonly planet = input.required<Planet>();
   readonly back = output<void>();
   readonly game: ColonyService = inject(ColonyService);
+  readonly catalogue: readonly BuildingDefinition[] = this.game.catalogue;
   readonly colony = computed(() => this.game.colonies()[this.planet().id]);
+  readonly water = computed(() => waterEconomy(this.colony()));
+  readonly food = computed(() => foodEconomy(this.colony()));
+  readonly foodLevel = computed(() => {
+    const balance = this.food().balance;
+    return balance < 0 ? 'deficit' : balance <= 0.2 ? 'balanced' : 'surplus';
+  });
+  readonly resourceNumbers = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
   readonly side = computed(() => this.game.gridSize(this.planet().radius));
   readonly blueprint = signal<BuildingType | null>(null);
   readonly dragging = signal<BuildingType | null>(null);
   readonly statusLabels = BUILDING_STATUS_LABELS;
+  readonly buildingTypes = BuildingType;
+  readonly demolitionTarget = signal<number | null>(null);
+  readonly buildingImages: Readonly<Record<BuildingType, string>> = {
+    [BuildingType.Base]: 'assets/buildings/MainBase.png',
+    [BuildingType.Power]: 'assets/buildings/SolarPower.png',
+    [BuildingType.Water]: 'assets/buildings/WaterPurification.png',
+    [BuildingType.Minerals]: 'assets/buildings/MineralExtractionFacility.png',
+    [BuildingType.Gas]: 'assets/buildings/GasExtractor.png',
+    [BuildingType.Housing]: 'assets/buildings/ResidentialHabitat.png',
+    [BuildingType.Farm]: 'assets/buildings/Farm.png',
+  };
   readonly selectedTile = signal<number | null>(null);
   readonly message = signal('');
-  readonly zoom = signal(1);
+  readonly zoom = signal(1.5);
+  readonly mapOffset = signal({ x: 0, y: 0 });
+  readonly panning = signal(false);
+  private readonly viewport = viewChild.required<ElementRef<HTMLDivElement>>('mapViewport');
+  private resizeObserver?: ResizeObserver;
+  private panGesture: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    moved: boolean;
+  } | null = null;
+  private suppressMapClick = false;
   readonly tileBuildings = computed(
     () =>
       new Map<number, PlacedBuilding>(
@@ -32,31 +89,80 @@ export class PlanetMapComponent implements OnChanges {
       ),
   );
   readonly inspected = computed(() => this.tileBuildings().get(this.selectedTile() ?? -1));
+  readonly demolitionProblem = computed(() => {
+    const building = this.inspected();
+    if (!building) return null;
+    const problem = this.game.demolitionProblem(this.planet(), building.id);
+    return problem ? DEMOLITION_ERROR_LABELS[problem] : null;
+  });
   readonly geometry = computed(() => createHexMap(this.side()));
+  readonly surfaceBounds = computed(() => ({
+    x: -96,
+    y: -96 * MAP_VERTICAL_SCALE,
+    width: this.geometry().width + 192,
+    height: this.geometry().height + 192 * MAP_VERTICAL_SCALE,
+  }));
+  readonly surfaceTexture = computed(() => {
+    const surface = this.surfaceBounds();
+    return createSurfaceTexture(this.planet(), surface.width, surface.height / MAP_VERTICAL_SCALE);
+  });
+  readonly horizonPath = computed(() => {
+    const surface = this.surfaceBounds();
+    const top = surface.y + HORIZON_CURVE;
+    return `M ${surface.x} ${top} Q ${surface.x + surface.width / 2} ${surface.y - HORIZON_CURVE} ${surface.x + surface.width} ${top}`;
+  });
+  readonly surfaceOutline = computed(() => {
+    const surface = this.surfaceBounds();
+    return `${this.horizonPath()} V ${surface.y + surface.height} H ${surface.x} Z`;
+  });
+
+  ngAfterViewInit(): void {
+    const viewport = this.viewport().nativeElement;
+    this.resizeObserver = new ResizeObserver(() => this.fitMap(viewport));
+    this.resizeObserver.observe(viewport);
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+  }
 
   ngOnChanges(): void {
     this.game.openPlanet(this.planet());
     this.blueprint.set(null);
     this.dragEnd();
     this.selectedTile.set(null);
+    this.demolitionTarget.set(null);
     this.message.set('');
+    this.zoom.set(1.5);
+    this.mapOffset.set({ x: 0, y: 0 });
+    this.panGesture = null;
+    this.panning.set(false);
+    this.suppressMapClick = false;
+    if (this.resizeObserver) this.fitMap(this.viewport().nativeElement);
   }
 
   choose(definition: BuildingDefinition): void {
+    this.demolitionTarget.set(null);
     this.blueprint.set(definition.type);
     this.message.set('');
     const tile = this.selectedTile();
     if (tile !== null && !this.tileBuildings().has(tile)) this.place(definition.type, tile);
   }
 
-  selectTile(tile: number): void {
+  selectTile(tile: number, event?: MouseEvent): void {
+    if (event && this.suppressMapClick) {
+      this.suppressMapClick = false;
+      return;
+    }
     this.selectedTile.set(tile);
+    this.demolitionTarget.set(null);
     this.message.set('');
     const type = this.blueprint();
     if (type && !this.tileBuildings().has(tile)) this.place(type, tile);
   }
 
   dragStart(event: DragEvent, definition: BuildingDefinition): void {
+    this.demolitionTarget.set(null);
     if (this.game.buildProblem(this.planet(), definition.type)) {
       event.preventDefault();
       return;
@@ -76,6 +182,31 @@ export class PlanetMapComponent implements OnChanges {
     return problem ? BUILD_ERROR_LABELS[problem] : null;
   }
 
+  requestDemolition(): void {
+    const building = this.inspected();
+    if (!building) return;
+    const problem = this.demolitionProblem();
+    if (problem) {
+      this.message.set(problem);
+      return;
+    }
+    this.demolitionTarget.set(building.id);
+  }
+
+  confirmDemolition(): void {
+    const id = this.demolitionTarget();
+    if (id === null) return;
+    const problem = this.game.demolish(this.planet(), id);
+    this.demolitionTarget.set(null);
+    if (problem) {
+      this.message.set(DEMOLITION_ERROR_LABELS[problem]);
+      return;
+    }
+    this.blueprint.set(null);
+    this.dragEnd();
+    this.message.set('Здание снесено. Участок освобождён.');
+  }
+
   allowDrop(event: Event): void {
     event.preventDefault();
   }
@@ -86,6 +217,7 @@ export class PlanetMapComponent implements OnChanges {
     const type = (event as DragEvent).dataTransfer?.getData('text/plain');
     const definition = this.game.catalogue.find((building) => building.type === type);
     if (definition) {
+      this.demolitionTarget.set(null);
       this.selectedTile.set(tile);
       this.place(definition.type, tile);
     }
@@ -108,12 +240,114 @@ export class PlanetMapComponent implements OnChanges {
     return Math.max(0, Math.ceil((building.completesAt - this.game.clock()) / 1000));
   }
 
-  terrain(tile: number): string {
-    return terrainColor(this.planet(), tile);
+  zoomMap(event: WheelEvent): void {
+    event.preventDefault();
+    if (event.deltaY === 0 || this.panGesture) return;
+    const viewport = event.currentTarget as HTMLElement;
+    const bounds = viewport.getBoundingClientRect();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
+    const delta = Math.max(-500, Math.min(500, event.deltaY * unit));
+    const previousZoom = this.zoom();
+    const nextZoom = Math.max(
+      this.minimumZoom(bounds),
+      Math.min(3, previousZoom * Math.exp(-delta * 0.0015)),
+    );
+    const ratio = nextZoom / previousZoom;
+    const anchorX = event.clientX - bounds.left - bounds.width / 2;
+    const anchorY = event.clientY - bounds.top - bounds.height / 2;
+    const offset = this.mapOffset();
+    this.zoom.set(nextZoom);
+    this.setMapOffset(
+      anchorX - (anchorX - offset.x) * ratio,
+      anchorY - (anchorY - offset.y) * ratio,
+      viewport,
+    );
   }
 
-  changeZoom(amount: number): void {
-    this.zoom.update((zoom) => Math.max(0.6, Math.min(1.6, zoom + amount)));
+  startPan(event: PointerEvent): void {
+    if (event.button !== 0 || !event.isPrimary || this.dragging()) return;
+    this.fitMap(event.currentTarget as HTMLElement);
+    const offset = this.mapOffset();
+    this.suppressMapClick = false;
+    this.panGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: offset.x,
+      offsetY: offset.y,
+      moved: false,
+    };
+  }
+
+  movePan(event: PointerEvent): void {
+    const gesture = this.panGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.moved && Math.hypot(dx, dy) < 5) return;
+    const viewport = event.currentTarget as HTMLElement;
+    if (!gesture.moved) {
+      gesture.moved = true;
+      viewport.setPointerCapture(event.pointerId);
+      this.panning.set(true);
+      this.suppressMapClick = true;
+    }
+    event.preventDefault();
+    this.setMapOffset(gesture.offsetX + dx, gesture.offsetY + dy, viewport);
+  }
+
+  endPan(event: PointerEvent): void {
+    if (this.panGesture?.pointerId !== event.pointerId) return;
+    const viewport = event.currentTarget as HTMLElement;
+    this.panGesture = null;
+    this.panning.set(false);
+    if (viewport.hasPointerCapture(event.pointerId))
+      viewport.releasePointerCapture(event.pointerId);
+  }
+
+  leaveMap(event: PointerEvent): void {
+    if (!this.panGesture?.moved) this.endPan(event);
+  }
+
+  revealTile(event: FocusEvent): void {
+    const tile = event.target as SVGElement;
+    if (!tile.matches(':focus-visible')) return;
+    const viewport = event.currentTarget as HTMLElement;
+    const bounds = viewport.getBoundingClientRect();
+    const tileBounds = tile.getBoundingClientRect();
+    const dx =
+      Math.max(0, bounds.left - tileBounds.left) + Math.min(0, bounds.right - tileBounds.right);
+    const dy =
+      Math.max(0, bounds.top - tileBounds.top) + Math.min(0, bounds.bottom - tileBounds.bottom);
+    const offset = this.mapOffset();
+    this.setMapOffset(offset.x + dx, offset.y + dy, viewport);
+  }
+
+  private setMapOffset(x: number, y: number, viewport: HTMLElement): void {
+    const bounds = viewport.getBoundingClientRect();
+    const surface = this.surfaceBounds();
+    const limitX = Math.max(0, (surface.width * this.zoom() - bounds.width) / 2);
+    const minY = (bounds.height - surface.height * this.zoom()) / 2;
+    const maxY = Math.max(minY, -minY + SKY_HEIGHT);
+    this.mapOffset.set({
+      x: Math.max(-limitX, Math.min(limitX, x)),
+      y: Math.max(minY, Math.min(maxY, y)),
+    });
+  }
+
+  private minimumZoom(bounds: { width: number; height: number }): number {
+    const surface = this.surfaceBounds();
+    return Math.max(
+      0.6,
+      bounds.width / surface.width,
+      (bounds.height - SKY_HEIGHT) / surface.height,
+    );
+  }
+
+  private fitMap(viewport: HTMLElement): void {
+    this.zoom.update((zoom) => Math.max(zoom, this.minimumZoom(viewport.getBoundingClientRect())));
+    const offset = this.mapOffset();
+    this.setMapOffset(offset.x, offset.y, viewport);
   }
 
   private place(type: BuildingType, tile: number): void {

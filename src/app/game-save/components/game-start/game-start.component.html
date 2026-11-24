@@ -1,0 +1,54 @@
+<main class="start-screen">
+  <section class="start-panel" aria-labelledby="game-start-title">
+    <span class="eyebrow">СИСТЕМА ГЕЛИОС</span>
+    <h1 id="game-start-title">SpaceFortress</h1>
+    <p>Выберите, с какой сессии начать. Время в этом меню не идёт.</p>
+
+    @if (saved(); as saved) {
+      <p>
+        Найдена сохранённая игра:
+        <time [attr.datetime]="saved.savedAt">{{
+          saved.savedAt | date: 'dd.MM.yyyy HH:mm:ss'
+        }}</time
+        >.
+      </p>
+    } @else if (!error()) {
+      <p>Локального сохранения пока нет.</p>
+    }
+
+    @if (error(); as error) {
+      <p class="start-error" role="alert">{{ error }}</p>
+      <div class="actions">
+        <button type="button" data-retry-startup (click)="inspectSave()">Проверить ещё раз</button>
+        @if (rawSave() !== null) {
+          <button type="button" data-download-original (click)="downloadOriginal()">
+            Скачать исходные данные
+          </button>
+        }
+      </div>
+    }
+
+    @if (confirmingNewGame()) {
+      <div role="group" aria-labelledby="new-game-confirmation">
+        <h2 id="new-game-confirmation">Начать новую игру?</h2>
+        <p>
+          Прогресс текущей сессии будет сброшен. Локальная запись останется в браузере до следующего
+          успешного ручного или автоматического сохранения после запуска.
+        </p>
+        <div class="actions">
+          <button type="button" data-confirm-new-game (click)="confirmNewGame()">
+            Начать новую игру
+          </button>
+          <button type="button" data-cancel-new-game (click)="cancelNewGame()">Отмена</button>
+        </div>
+      </div>
+    } @else {
+      <div class="actions">
+        <button type="button" data-continue-game [disabled]="!saved()" (click)="continueGame()">
+          Продолжить
+        </button>
+        <button type="button" data-new-game (click)="requestNewGame()">Новая игра</button>
+      </div>
+    }
+  </section>
+</main>

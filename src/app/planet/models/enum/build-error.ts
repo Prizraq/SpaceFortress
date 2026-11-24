@@ -1,0 +1,17 @@
+export enum BuildError {
+  IdExhausted = 'id-exhausted',
+  Paused = 'paused',
+  ColonyMissing = 'colony-missing',
+  BaseExists = 'base-exists',
+  BaseRequired = 'base-required',
+  MapFull = 'map-full',
+  Depleted = 'depleted',
+  WaterUnavailable = 'water-unavailable',
+  Credits = 'credits',
+  Minerals = 'minerals',
+  Water = 'water',
+  Gas = 'gas',
+  Energy = 'energy',
+  InvalidTile = 'invalid-tile',
+  Occupied = 'occupied',
+}

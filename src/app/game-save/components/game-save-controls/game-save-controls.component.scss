@@ -1,0 +1,143 @@
+:host {
+  display: block;
+  position: relative;
+  max-width: 100%;
+  font-size: 12px;
+}
+* {
+  box-sizing: border-box;
+}
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: #0a171be6;
+}
+.menu-panel,
+.feedback {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  width: min(320px, calc(100vw - 32px));
+}
+.menu-panel {
+  z-index: 2;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: #0a171bf5;
+  box-shadow: 0 16px 40px #0006;
+}
+.menu-panel[hidden] {
+  display: none;
+}
+.menu-heading,
+.last-saved {
+  display: block;
+  font:
+    10px/1.7 'Consolas',
+    monospace;
+  color: var(--muted);
+}
+.menu-heading {
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+.menu-actions {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.menu-actions button {
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border-color: transparent;
+}
+.menu-actions button:hover,
+.menu-toggle:hover,
+.menu-toggle[aria-expanded='true'] {
+  background: #163033;
+  border-color: var(--line);
+}
+.menu-actions button:first-child {
+  margin-bottom: 6px;
+  border-bottom-color: var(--line);
+}
+.feedback {
+  position: fixed;
+  top: auto;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  gap: 8px;
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  pointer-events: none;
+}
+.feedback.has-confirmation {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  bottom: auto;
+}
+@media (max-width: 700px) {
+  .feedback {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+.feedback > * {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: #0a171bf5;
+  box-shadow: 0 8px 24px #0004;
+  pointer-events: auto;
+}
+.confirmation h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 400;
+}
+.confirmation .save-controls {
+  margin-top: 12px;
+}
+.save-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+button {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 6px 12px;
+  background: #163033;
+  color: var(--cyan);
+  font: inherit;
+  cursor: pointer;
+}
+button:focus-visible {
+  outline: 2px solid #f1c979;
+  outline-offset: 3px;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+time {
+  white-space: nowrap;
+}
+p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.save-error {
+  color: #ffb6a8;
+}
+.save-message {
+  background: #0a171bb3;
+}

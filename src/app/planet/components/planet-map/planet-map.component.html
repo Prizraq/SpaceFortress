@@ -1,0 +1,530 @@
+@if (colony(); as colony) {
+  <div class="colony-screen">
+    <header class="colony-header">
+      <button class="back-button" type="button" (click)="back.emit()" title="Вернуться к системе">
+        <app-game-icon name="back" /> К системе
+      </button>
+      <div class="planet-name">
+        <span>КОЛОНИАЛЬНОЕ УПРАВЛЕНИЕ / ГЕЛИОС</span>
+        <h1>{{ planet().name }}</h1>
+      </div>
+    </header>
+
+    <div class="resource-bar" aria-label="Ресурсы колонии">
+      <div class="credits">
+        <app-game-icon name="credits" /><span>Кредиты <small>ОБЩИЙ СЧЁТ</small></span
+        ><strong data-resource="credits">{{ game.credits() }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="minerals" /><span>Минералы</span
+        ><strong data-resource="minerals">{{
+          resourceNumbers.format(colony.stocks.minerals)
+        }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="water" /><span
+          >Вода
+          <small
+            data-water-balance
+            [class.water-deficit]="water().balance < 0"
+            [title]="
+              'Добыча: ' +
+              resourceNumbers.format(water().production) +
+              '; потребность: ' +
+              resourceNumbers.format(water().consumption) +
+              ' за 2 с'
+            "
+            >{{ water().balance > 0 ? '+' : '' }}{{ resourceNumbers.format(water().balance) }} /
+            цикл</small
+          ></span
+        ><strong data-resource="water">{{ resourceNumbers.format(colony.stocks.water) }}</strong>
+      </div>
+      <div
+        class="food"
+        [class.food-surplus]="foodLevel() === 'surplus'"
+        [class.food-balanced]="foodLevel() === 'balanced'"
+        [class.food-deficit]="foodLevel() === 'deficit'"
+      >
+        <app-game-icon name="food" /><span
+          >Пища
+          <small
+            data-food-balance
+            [title]="
+              'Выработка: ' +
+              resourceNumbers.format(food().production) +
+              '; потребление: ' +
+              resourceNumbers.format(food().consumption) +
+              ' за 2 с'
+            "
+            >{{ food().balance > 0 ? '+' : '' }}{{ resourceNumbers.format(food().balance) }} /
+            цикл</small
+          ></span
+        ><strong data-resource="food"
+          >{{ resourceNumbers.format(colony.stocks.food) }}
+          @if (colony.stocks.food === 0) {
+            <small class="hunger" role="status">Голод!</small>
+          }
+        </strong>
+      </div>
+      <div>
+        <app-game-icon name="gas" /><span>Газ</span
+        ><strong data-resource="gas">{{ resourceNumbers.format(colony.stocks.gas) }}</strong>
+      </div>
+      <div class="energy">
+        <app-game-icon name="power" /><span>Свободная энергия</span
+        ><strong data-resource="energy">{{ resourceNumbers.format(colony.stocks.energy) }}</strong>
+      </div>
+      <div>
+        <app-game-icon name="housing" /><span
+          >Население <small data-employed>Работает: {{ workforce().employed }}</small></span
+        ><strong data-resource="population"
+          >{{ colony.stocks.population }} / {{ colony.stocks.populationCapacity }}</strong
+        >
+      </div>
+    </div>
+
+    <div class="workspace">
+      <aside class="catalogue" aria-label="Каталог зданий">
+        <div class="section-heading">
+          <h2>Строительство</h2>
+          <span>{{ catalogue.length }}</span>
+        </div>
+        @for (definition of catalogue; track definition.type) {
+          @let problem = buildProblem(definition.type);
+          <article
+            class="building-option"
+            [class.chosen]="blueprint() === definition.type || dragging() === definition.type"
+            [attr.draggable]="!problem"
+            (dragstart)="dragStart($event, definition)"
+            (dragend)="dragEnd()"
+          >
+            <div class="building-title">
+              <span class="building-icon">
+                <img
+                  [src]="buildingImages[definition.type]"
+                  alt=""
+                  width="64"
+                  height="48"
+                  draggable="false"
+                />
+              </span>
+              <div>
+                <h3>{{ definition.name }}</h3>
+                <span
+                  >{{ definition.buildTime }} с <b> / </b
+                  >{{
+                    definition.production
+                      ? '+' + game.yieldFor(planet(), definition) + ' / 2 с'
+                      : definition.energyGain
+                        ? '+' + definition.energyGainFor(planet()) + ' энергии'
+                        : '+' + definition.populationCapacity + ' к лимиту населения'
+                  }}</span
+                >
+              </div>
+            </div>
+            <div class="costs" aria-label="Стоимость строительства">
+              <span title="Кредиты"
+                ><app-game-icon name="credits" />{{ definition.costCredits }}</span
+              >
+              <span title="Минералы"
+                ><app-game-icon name="minerals" />{{ definition.costMinerals }}</span
+              >
+              @if (definition.costWater) {
+                <span title="Вода"><app-game-icon name="water" />{{ definition.costWater }}</span>
+              }
+              @if (definition.costGas) {
+                <span title="Газ"><app-game-icon name="gas" />{{ definition.costGas }}</span>
+              }
+              @if (definition.costEnergy) {
+                <span title="Резерв свободной энергии при начале строительства"
+                  ><app-game-icon name="power" />{{ definition.costEnergy }}</span
+                >
+              }
+              @if (definition.waterUse) {
+                <span title="Потребление воды за цикл (2 секунды)"
+                  ><app-game-icon name="water" />−{{ definition.waterUse }} / 2 с</span
+                >
+              }
+              @if (definition.workersRequired) {
+                <span title="Работники для полной мощности"
+                  ><app-game-icon name="housing" />{{ definition.workersRequired }} чел.</span
+                >
+              }
+            </div>
+            <button
+              type="button"
+              class="build-button"
+              [disabled]="!!problem"
+              [title]="problem ?? 'Разместить здание'"
+              (click)="choose(definition)"
+              [attr.aria-label]="'Строить: ' + definition.name"
+            >
+              <app-game-icon name="build" />{{
+                blueprint() === definition.type ? 'Выбрано' : 'Строить'
+              }}
+            </button>
+            @if (problem) {
+              <p class="availability">{{ problem }}</p>
+            }
+          </article>
+        }
+      </aside>
+
+      <main class="surface">
+        <div class="surface-heading">
+          <div>
+            <span class="eyebrow">ПОВЕРХНОСТЬ / СЕКТОР 01</span>
+            <h2>Планетарная сетка</h2>
+          </div>
+          <span
+            >{{ side() }} × {{ side()
+            }}<small
+              >{{ colony.buildings.length }} / {{ geometry().tiles.length }} участков</small
+            ></span
+          >
+        </div>
+        <div class="map-controls">
+          <span class="map-status">{{
+            blueprint() ? game.definition(blueprint()!).name : 'ОРБИТАЛЬНАЯ СЪЁМКА'
+          }}</span>
+          @if (blueprint()) {
+            <button
+              type="button"
+              title="Отменить размещение"
+              aria-label="Отменить размещение"
+              (click)="blueprint.set(null)"
+            >
+              <app-game-icon name="close" />
+            </button>
+          }
+          <span class="map-hint">Колёсико — масштаб · Перетаскивание — обзор</span>
+        </div>
+        <div
+          #mapViewport
+          class="map-viewport"
+          [class.placing]="!!blueprint() || !!dragging()"
+          [class.panning]="panning()"
+          (wheel)="zoomMap($event)"
+          (pointerdown)="startPan($event)"
+          (pointermove)="movePan($event)"
+          (pointerup)="endPan($event)"
+          (pointercancel)="endPan($event)"
+          (lostpointercapture)="endPan($event)"
+          (pointerleave)="leaveMap($event)"
+          (focusin)="revealTile($event)"
+        >
+          <svg
+            class="hex-map"
+            [attr.viewBox]="'0 0 ' + geometry().width + ' ' + geometry().height"
+            [style.width.px]="geometry().width * zoom()"
+            [style.height.px]="geometry().height * zoom()"
+            [style.transform]="
+              'translate(-50%, -50%) translate(' + mapOffset().x + 'px, ' + mapOffset().y + 'px)'
+            "
+            role="group"
+            aria-label="Участки планеты"
+          >
+            <defs>
+              <clipPath [attr.id]="surfacePatternId + '-clip'">
+                <path [attr.d]="surfaceOutline()" />
+              </clipPath>
+              <pattern
+                [attr.id]="surfacePatternId"
+                [attr.x]="surfaceBounds().x"
+                [attr.y]="surfaceBounds().y"
+                [attr.width]="surfaceBounds().width"
+                [attr.height]="surfaceBounds().height"
+                patternUnits="userSpaceOnUse"
+              >
+                <image
+                  class="surface-terrain"
+                  [attr.href]="surfaceTexture()"
+                  [attr.width]="surfaceBounds().width"
+                  [attr.height]="surfaceBounds().height"
+                  preserveAspectRatio="none"
+                />
+              </pattern>
+            </defs>
+            <rect
+              class="surface-background"
+              [attr.x]="surfaceBounds().x"
+              [attr.y]="surfaceBounds().y"
+              [attr.width]="surfaceBounds().width"
+              [attr.height]="surfaceBounds().height"
+              [attr.fill]="'url(#' + surfacePatternId + ')'"
+              [attr.clip-path]="'url(#' + surfacePatternId + '-clip)'"
+              pointer-events="none"
+              aria-hidden="true"
+            />
+            <path
+              class="surface-horizon"
+              [attr.d]="horizonPath()"
+              fill="none"
+              stroke="#b4dce460"
+              stroke-width="1.2"
+              pointer-events="none"
+              aria-hidden="true"
+            />
+            @for (tile of geometry().tiles; track tile.id) {
+              @let building = tileBuildings().get(tile.id);
+              <g
+                class="hex-tile"
+                [class.selected]="selectedTile() === tile.id"
+                [class.occupied]="!!building"
+                [class.constructing]="building && !building.completed"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="
+                  building
+                    ? game.definition(building.type).name + ', участок ' + (tile.id + 1)
+                    : 'Участок ' + (tile.id + 1)
+                "
+                (click)="selectTile(tile.id, $event)"
+                (keydown.enter)="selectTile(tile.id)"
+                (keydown.space)="$event.preventDefault(); selectTile(tile.id)"
+                (dragover)="allowDrop($event)"
+                (drop)="drop($event, tile.id)"
+                [attr.data-tile]="tile.id"
+              >
+                <polygon [attr.points]="tile.points" fill="transparent" />
+                @if (building) {
+                  <ellipse
+                    class="building-shadow"
+                    [attr.cx]="tile.x"
+                    [attr.cy]="tile.y + 18"
+                    rx="20"
+                    ry="5"
+                    aria-hidden="true"
+                  />
+                  <image
+                    class="building-sprite"
+                    [attr.href]="buildingImages[building.type]"
+                    [attr.x]="tile.x - 25"
+                    [attr.y]="tile.y - 22"
+                    width="50"
+                    height="40"
+                    preserveAspectRatio="xMidYMax meet"
+                    aria-hidden="true"
+                  />
+                  <text [attr.x]="tile.x" [attr.y]="tile.y + 27" text-anchor="middle">
+                    {{
+                      building.completed
+                        ? game.definition(building.type).code
+                        : progress(building) + '%'
+                    }}
+                  </text>
+                } @else {
+                  <text
+                    class="tile-number"
+                    [attr.x]="tile.x"
+                    [attr.y]="tile.y + 3"
+                    text-anchor="middle"
+                  >
+                    {{ tile.id + 1 }}
+                  </text>
+                }
+              </g>
+            }
+          </svg>
+        </div>
+        <div class="surface-footer">
+          <span>{{ planet().radius }} КМ / РАДИУС</span
+          ><span>{{ colony.buildings.length }} ПОСТРОЕК</span><span>ЦИКЛ: 2 С</span>
+        </div>
+        <p class="action-message" role="status">
+          {{ message() }}
+          @if (!water().populationSupplied) {
+            <span>Недостаточно воды для населения: население убывает на 1 жителя за цикл.</span>
+          }
+        </p>
+      </main>
+
+      <aside class="inspector" aria-label="Информация об участке">
+        <div class="section-heading">
+          <h2>{{ selectedTile() === null ? 'Планета' : 'Участок ' + (selectedTile()! + 1) }}</h2>
+          <span>01</span>
+        </div>
+        @if (inspected(); as building) {
+          @let definition = game.definition(building.type);
+          <img
+            class="inspection-art"
+            [src]="buildingImages[building.type]"
+            alt=""
+            width="200"
+            height="150"
+            draggable="false"
+          />
+          <span class="eyebrow">{{ building.completed ? 'ОБЪЕКТ КОЛОНИИ' : 'СТРОИТЕЛЬСТВО' }}</span>
+          <h3>{{ definition.name }}</h3>
+          <p>{{ definition.overview }}</p>
+          <dl>
+            <div>
+              <dt>Состояние</dt>
+              <dd>{{ statusLabels[building.status] }}</dd>
+            </div>
+            <div>
+              <dt>Работники</dt>
+              <dd data-building-workers>
+                {{ workforce().workers.get(building.id) ?? 0 }} / {{ definition.workersRequired }}
+              </dd>
+            </div>
+            @if (definition.workersRequired) {
+              <div>
+                <dt>Эффективность</dt>
+                <dd data-building-efficiency>
+                  {{ resourceNumbers.format(workforce().efficiency(building) * 100) }}%
+                </dd>
+              </div>
+            }
+            @if (!building.completed) {
+              <div>
+                <dt>До завершения</dt>
+                <dd>{{ remaining(building) }} с</dd>
+              </div>
+            }
+            @if (definition.production) {
+              <div>
+                <dt>Производство / 2 с</dt>
+                <dd>+{{ resourceNumbers.format(buildingYield(building)) }}</dd>
+              </div>
+            }
+            @if (definition.waterSupply || definition.foodSupply) {
+              <div>
+                <dt>Вода / 2 с</dt>
+                <dd>+{{ resourceNumbers.format(definition.waterSupply) }}</dd>
+              </div>
+              <div>
+                <dt>Пища / 2 с</dt>
+                <dd>+{{ resourceNumbers.format(definition.foodSupply) }}</dd>
+              </div>
+            }
+            @if (definition.energyGain) {
+              <div>
+                <dt>{{ building.completed ? 'Выработка энергии' : 'Энергия после постройки' }}</dt>
+                <dd>
+                  +{{
+                    resourceNumbers.format(
+                      definition.energyGainFor(planet()) *
+                        (building.completed ? workforce().efficiency(building) : 1)
+                    )
+                  }}
+                </dd>
+              </div>
+            }
+            @if (definition.costEnergy) {
+              <div>
+                <dt>Занимаемая энергия</dt>
+                <dd>{{ building.enabled ? definition.costEnergy : 0 }}</dd>
+              </div>
+            }
+            @if (definition.waterUse) {
+              <div>
+                <dt>Вода / 2 с</dt>
+                <dd>{{ building.enabled ? '−' + definition.waterUse : '0' }}</dd>
+              </div>
+            }
+            @if (definition.populationGain) {
+              <div>
+                <dt>Начальное население</dt>
+                <dd>+{{ definition.populationGain }}</dd>
+              </div>
+            }
+            @if (definition.populationCapacity) {
+              <div>
+                <dt>Лимит населения</dt>
+                <dd>+{{ definition.populationCapacity }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Время постройки</dt>
+              <dd>{{ definition.buildTime }} с</dd>
+            </div>
+          </dl>
+          @if (!building.completed) {
+            <div class="construction-progress">
+              <span [style.width.%]="progress(building)"></span>
+            </div>
+          }
+          @if (building.type !== buildingTypes.Base && building.type !== buildingTypes.Housing) {
+            <button
+              class="build-button"
+              type="button"
+              data-building-toggle
+              [disabled]="game.paused() || !building.completed"
+              [title]="
+                game.paused()
+                  ? 'Игра на паузе: изменение зданий недоступно'
+                  : building.completed
+                    ? 'Переключить работу здания'
+                    : 'Сначала завершите строительство'
+              "
+              (click)="toggleBuilding()"
+            >
+              {{ building.enabled ? 'Отключить здание' : 'Включить здание' }}
+            </button>
+          }
+          @if (building.type !== buildingTypes.Base) {
+            @if (demolitionTarget() === building.id) {
+              <div role="group" aria-label="Подтверждение сноса">
+                <p>Снести здание без возврата материалов и кредитов?</p>
+                @if (building.completed && definition.populationCapacity) {
+                  <p>
+                    Лимит населения уменьшится на {{ definition.populationCapacity }}. Лишнее
+                    население будет убывать на 1 жителя каждые 2 секунды.
+                  </p>
+                }
+                <button
+                  class="build-button demolish-button"
+                  type="button"
+                  [disabled]="!!demolitionProblem()"
+                  (click)="confirmDemolition()"
+                >
+                  Подтвердить снос
+                </button>
+                <button class="build-button" type="button" (click)="demolitionTarget.set(null)">
+                  Отмена
+                </button>
+              </div>
+            } @else {
+              <button
+                class="build-button demolish-button"
+                type="button"
+                [disabled]="!!demolitionProblem()"
+                (click)="requestDemolition()"
+              >
+                {{ building.completed ? 'Снести здание' : 'Отменить строительство' }}
+              </button>
+            }
+            @if (demolitionProblem(); as problem) {
+              <p class="availability">{{ problem }}</p>
+            }
+          }
+        } @else {
+          <div class="inspection-icon"><app-game-icon name="base" /></div>
+          <span class="eyebrow">{{
+            selectedTile() === null ? 'РЕСУРСНЫЙ ПОТЕНЦИАЛ' : 'НЕОСВОЕННАЯ ТЕРРИТОРИЯ'
+          }}</span>
+          <h3>{{ selectedTile() === null ? planet().name : 'Свободный участок' }}</h3>
+          <dl>
+            <div>
+              <dt>Минеральные запасы</dt>
+              <dd>{{ resourceNumbers.format(colony.deposits.minerals) }}</dd>
+            </div>
+            <div>
+              <dt>Газовые запасы</dt>
+              <dd>{{ resourceNumbers.format(colony.deposits.gas) }}</dd>
+            </div>
+            <div>
+              <dt>Содержание воды</dt>
+              <dd>{{ planet().resourses.water }}%</dd>
+            </div>
+            <div>
+              <dt>Атмосфера</dt>
+              <dd>{{ planet().athmosphere ? 'Есть' : 'Нет' }}</dd>
+            </div>
+          </dl>
+        }
+      </aside>
+    </div>
+  </div>
+}

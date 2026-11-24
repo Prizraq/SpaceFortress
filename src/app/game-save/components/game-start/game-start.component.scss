@@ -1,0 +1,64 @@
+:host {
+  display: block;
+  color: #e2eeed;
+  font:
+    14px 'Bahnschrift',
+    'Trebuchet MS',
+    sans-serif;
+}
+.start-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #060c0e;
+}
+.start-panel {
+  width: min(100%, 560px);
+  padding: 24px;
+  box-sizing: border-box;
+  border: 1px solid #79e7ec30;
+  background: #0a171b;
+}
+.eyebrow {
+  color: #829b9e;
+  font-size: 11px;
+}
+h1 {
+  margin: 12px 0 24px;
+  font-weight: 400;
+}
+h2 {
+  font-size: 18px;
+}
+p {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+button {
+  border: 1px solid #79e7ec30;
+  border-radius: 2px;
+  padding: 10px 16px;
+  background: #163033;
+  color: #79e7ec;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button:focus-visible {
+  outline: 2px solid #f1c979;
+  outline-offset: 3px;
+}
+.start-error {
+  color: #ffb6a8;
+}

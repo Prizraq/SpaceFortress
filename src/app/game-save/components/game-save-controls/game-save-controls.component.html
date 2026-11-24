@@ -1,0 +1,116 @@
+<button
+  #menuToggle
+  class="menu-toggle"
+  type="button"
+  data-game-menu-toggle
+  aria-label="Меню игры"
+  title="Меню игры"
+  [attr.aria-expanded]="menuOpen()"
+  aria-controls="game-menu"
+  (click)="menuOpen.set(!menuOpen()); confirmingNewGame.set(false)"
+>
+  <app-game-icon name="menu" />
+</button>
+<div id="game-menu" class="menu-panel" [hidden]="!menuOpen()" data-pause-blocker>
+  <span class="menu-heading">УПРАВЛЕНИЕ СЕССИЕЙ</span>
+  <div class="menu-actions" role="group" aria-label="Меню игры">
+    <button type="button" data-new-game [disabled]="saves.importBusy()" (click)="requestNewGame()">
+      Новая игра
+    </button>
+    <button type="button" data-save-game [disabled]="saves.importBusy()" (click)="save()">
+      Сохранить
+    </button>
+    <button type="button" data-load-game [disabled]="saves.importBusy()" (click)="load()">
+      Загрузить
+    </button>
+    <button type="button" data-export-game [disabled]="saves.importBusy()" (click)="exportSave()">
+      Экспорт
+    </button>
+    <button
+      type="button"
+      data-import-game
+      [disabled]="saves.importBusy()"
+      (click)="chooseImport(importFile)"
+    >
+      Импорт
+    </button>
+  </div>
+  <span data-last-saved class="last-saved">
+    Последняя запись:
+    @if (lastSavedAt(); as savedAt) {
+      <time [attr.datetime]="savedAt">{{ savedAt | date: 'dd.MM.yyyy HH:mm:ss' }}</time>
+    } @else {
+      нет
+    }
+  </span>
+</div>
+<input
+  #importFile
+  type="file"
+  accept=".json,application/json"
+  hidden
+  (change)="importSelected(importFile)"
+  (cancel)="saves.cancelImport()"
+/>
+<div
+  class="feedback"
+  [class.has-confirmation]="confirmingNewGame() || saves.importBusy()"
+  aria-label="Операции с сохранениями"
+>
+  @if (confirmingNewGame()) {
+    <div
+      class="confirmation"
+      role="group"
+      aria-labelledby="session-new-game-title"
+      data-pause-blocker
+    >
+      <h2 id="session-new-game-title">Начать новую игру?</h2>
+      <p>Текущая сессия будет сброшена. Локальная запись останется до следующего сохранения.</p>
+      <div class="save-controls">
+        <button
+          type="button"
+          data-confirm-new-game
+          [disabled]="saves.importBusy()"
+          (click)="confirmNewGame()"
+        >
+          Начать заново
+        </button>
+        <button #newGameCancel type="button" data-cancel-new-game (click)="cancelNewGame()">Отмена</button>
+      </div>
+    </div>
+  }
+  @if (saves.importPreview(); as preview) {
+    <div
+      class="confirmation"
+      role="group"
+      aria-labelledby="import-confirmation-title"
+      data-pause-blocker
+    >
+      <p id="import-confirmation-title">
+        Заменить текущую сессию сохранением из файла «{{ preview.fileName }}»? Дата:
+        {{ preview.savedAt | date: 'dd.MM.yyyy HH:mm:ss' }}.
+      </p>
+      <div class="save-controls">
+        <button type="button" data-confirm-import (click)="saves.confirmImport()">
+          Заменить сессию
+        </button>
+        <button type="button" data-cancel-import (click)="saves.cancelImport()">Отмена</button>
+      </div>
+    </div>
+  } @else if (saves.importBusy()) {
+    <p role="status">Ожидание или проверка файла. Игра временно остановлена.</p>
+    <button type="button" data-cancel-import (click)="saves.cancelImport()">Отмена импорта</button>
+  }
+  @if (saves.fileError(); as error) {
+    <p class="save-error" role="alert" data-file-error>{{ error }}</p>
+  }
+  @if (saves.fileMessage(); as message) {
+    <p role="status" data-file-result>{{ message }}</p>
+  }
+  @if (error(); as error) {
+    <p class="save-error" role="alert">{{ error }}</p>
+  }
+  @if (message(); as message) {
+    <p class="save-message" role="status">{{ message }}</p>
+  }
+</div>

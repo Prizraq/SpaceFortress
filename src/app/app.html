@@ -1,1 +1,5 @@
-<router-outlet />
+@if (playing()) {
+  <router-outlet />
+} @else {
+  <app-game-start (started)="playing.set(true)" />
+}

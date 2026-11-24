@@ -1,43 +1,43 @@
 {
-  "hash": "beaa4169",
+  "hash": "1a5cd20e",
   "configHash": "f24edc53",
-  "lockfileHash": "1010809c",
-  "browserHash": "61f454ee",
+  "lockfileHash": "47efe415",
+  "browserHash": "48b4df2f",
   "optimized": {
     "@angular/core": {
       "src": "../../../../../../node_modules/@angular/core/fesm2022/core.mjs",
       "file": "@angular_core.js",
-      "fileHash": "cd2cb175",
+      "fileHash": "a8810c07",
       "needsInterop": false
     },
     "@angular/platform-browser": {
       "src": "../../../../../../node_modules/@angular/platform-browser/fesm2022/platform-browser.mjs",
       "file": "@angular_platform-browser.js",
-      "fileHash": "758d00ed",
+      "fileHash": "a7de6881",
       "needsInterop": false
     },
     "@angular/router": {
       "src": "../../../../../../node_modules/@angular/router/fesm2022/router.mjs",
       "file": "@angular_router.js",
-      "fileHash": "d4f15f31",
+      "fileHash": "91eb2074",
       "needsInterop": false
     },
     "honeycomb-grid": {
       "src": "../../../../../../node_modules/honeycomb-grid/dist/honeycomb-grid.mjs",
       "file": "honeycomb-grid.js",
-      "fileHash": "bdaeeb06",
+      "fileHash": "18ab50d7",
       "needsInterop": false
     },
     "lucide": {
       "src": "../../../../../../node_modules/lucide/dist/esm/lucide.mjs",
       "file": "lucide.js",
-      "fileHash": "eaf8775d",
+      "fileHash": "4b361b85",
       "needsInterop": false
     },
     "pixi.js": {
       "src": "../../../../../../node_modules/pixi.js/lib/index.mjs",
       "file": "pixi__js.js",
-      "fileHash": "65c83021",
+      "fileHash": "980407b9",
       "needsInterop": false
     }
   },

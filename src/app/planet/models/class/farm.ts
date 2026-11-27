@@ -16,6 +16,6 @@ export class Farm extends Building {
   readonly buildTime = 6;
   override readonly production = ProducedResource.Food;
   override readonly productionAmount = 4;
-  override readonly workersRequired = 2;
+  override readonly workersRequired = 6;
   override readonly waterUse = 1;
 }

@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { PlanetService } from '../../shared/services/planet.service';
 import { BuildingType } from '../../planet/models/enum/building-type';
-import { readGameSave } from './game-save-validation';
+import * as GameSaveValidation from './game-save-validation';
 
 function validSave() {
   return {
-    version: 1,
+    version: 3,
     savedAt: '2030-01-01T00:00:00.000Z',
     gameTime: 101000,
     lastProductionTick: 100000,
     credits: 1680,
+    creditRemainder: 0,
+    maintenanceShortfall: 0,
     planets: new PlanetService().getPlanets(),
     colonies: [
       {
@@ -25,6 +27,7 @@ function validSave() {
             completesAt: 4000,
             completed: true,
             enabled: true,
+            disabledByFinance: false,
           },
           {
             id: 8,
@@ -34,6 +37,7 @@ function validSave() {
             completesAt: 101000,
             completed: false,
             enabled: true,
+            disabledByFinance: false,
           },
         ],
       },
@@ -46,12 +50,94 @@ function validSave() {
 type Fixture = ReturnType<typeof validSave>;
 
 describe('game save validation', () => {
+  it.each([1, 2])('migrates v%s without applying finances, changing deadlines or scaling credits', (version) => {
+    const source = validSave();
+    const legacy = { ...source, version, credits: Number.MAX_SAFE_INTEGER };
+    if (version === 1) {
+      Reflect.deleteProperty(legacy, 'creditRemainder');
+      Reflect.deleteProperty(legacy, 'maintenanceShortfall');
+    }
+    for (const colony of legacy.colonies) {
+      for (const building of colony.buildings) Reflect.deleteProperty(building, 'disabledByFinance');
+    }
+    expect(GameSaveValidation.readGameSave(JSON.stringify(legacy))).toEqual({
+      ...validSave(), credits: Number.MAX_SAFE_INTEGER,
+    });
+  });
+
+  it('preserves exact cents and the historical unpaid step in v3', () => {
+    const source = { ...validSave(), creditRemainder: 25, maintenanceShortfall: 110 };
+    expect(GameSaveValidation.readGameSave(JSON.stringify(source))).toEqual(source);
+  });
+
+  it('migrates a manually disabled v2 mine without inventing a financial reason or changing money', () => {
+    const source = validSave();
+    source.colonies[0].buildings[1] = {
+      ...source.colonies[0].buildings[1], startedAt: 4000, completesAt: 10000,
+      completed: true, enabled: false,
+    };
+    const legacy = { ...source, version: 2, creditRemainder: 73, maintenanceShortfall: 50 };
+    for (const building of legacy.colonies[0].buildings)
+      Reflect.deleteProperty(building, 'disabledByFinance');
+    expect(GameSaveValidation.readGameSave(JSON.stringify(legacy))).toEqual({
+      ...source, version: 3, creditRemainder: 73, maintenanceShortfall: 50,
+      colonies: source.colonies.map((colony) => ({
+        ...colony, buildings: colony.buildings.map((building) => ({
+          ...building, disabledByFinance: false,
+        })),
+      })),
+    });
+  });
+
+  it('round-trips the persistent financial reason independently of available credits', () => {
+    const source = validSave();
+    source.colonies[0].buildings[1] = {
+      ...source.colonies[0].buildings[1], startedAt: 4000, completesAt: 10000,
+      completed: true, enabled: false, disabledByFinance: true,
+    };
+    expect(GameSaveValidation.readGameSave(JSON.stringify(source))).toEqual(source);
+  });
+
+  it.each(['missing', 'string', 'enabled', 'construction', 'base', 'housing'])(
+    'rejects an invalid financial reason: %s', (reason) => {
+      const source = validSave();
+      const building = source.colonies[0].buildings[1];
+      Object.assign(building, {
+        startedAt: 0, completesAt: 6000, completed: true,
+        enabled: false, disabledByFinance: true,
+      });
+      if (reason === 'missing') Reflect.deleteProperty(building, 'disabledByFinance');
+      if (reason === 'string') Object.assign(building, { disabledByFinance: 'true' });
+      if (reason === 'enabled') building.enabled = true;
+      if (reason === 'construction') {
+        Object.assign(building, {
+          startedAt: 95000, completesAt: 101000, completed: false, enabled: true,
+        });
+      }
+      if (reason === 'base' || reason === 'housing') {
+        building.type = reason === 'base' ? BuildingType.Base : BuildingType.Housing;
+        building.enabled = true;
+      }
+      expect(() => GameSaveValidation.readGameSave(source)).toThrow('disabledByFinance');
+    },
+  );
+
+  it.each([
+    ['creditRemainder', -1], ['creditRemainder', 100], ['creditRemainder', 0.5],
+    ['maintenanceShortfall', -1], ['maintenanceShortfall', 0.1],
+    ['credits', 1.5], ['credits', Number.MAX_SAFE_INTEGER + 1],
+    ['creditRemainder', '25'], ['creditRemainder', NaN], ['creditRemainder', Infinity],
+    ['maintenanceShortfall', Number.MAX_SAFE_INTEGER + 1],
+  ])('rejects invalid %s=%s', (key, amount) => {
+    expect(() => GameSaveValidation.readGameSave({ ...validSave(), [key]: amount })).toThrow(key);
+  });
+
   it('accepts JSON and unknown objects with crisis states and construction due between ticks', () => {
     const source = validSave();
     const input: unknown = source;
-    const saved = readGameSave(input);
+    const saved = GameSaveValidation.readGameSave(input);
     expect(saved).toStrictEqual(source);
-    expect(readGameSave(JSON.stringify(source))).toStrictEqual(source);
+    expect(GameSaveValidation.readGameSave(JSON.stringify(source))).toStrictEqual(source);
     expect(saved.colonies[0].stocks.population).toBe(30);
     expect(saved.colonies[0].buildings[1].completed).toBe(false);
     expect(saved.planets).not.toBe(source.planets);
@@ -69,15 +155,22 @@ describe('game save validation', () => {
     source.colonies[0].buildings[1].completed = true;
     source.colonies[0].buildings[1].enabled = false;
     source.nextBuildingId = Number.MAX_SAFE_INTEGER;
-    expect(readGameSave(source)).toStrictEqual(source);
+    expect(GameSaveValidation.readGameSave(source)).toStrictEqual(source);
   });
 
   it('keeps only schema fields, never trusting injected computed values', () => {
     const source = validSave();
-    Object.assign(source, { tabHidden: true, systemPaused: true });
+    Object.assign(source, {
+      tabHidden: true, systemPaused: true,
+      finances: { income: 999, incomeCentsPerStep: 999, maintenance: 999, balance: 999 },
+      colonyFinances: [{ income: 999 }],
+    });
+    Object.assign(source.colonies[0], { income: 999, maintenance: 999, balance: 999 });
     Object.assign(source.colonies[0].stocks, { energy: Infinity, populationCapacity: -1 });
-    Object.assign(source.colonies[0].buildings[0], { status: 'invalid' });
-    expect(readGameSave(source)).toStrictEqual(validSave());
+    Object.assign(source.colonies[0].buildings[0], {
+      status: 'invalid', maintenancePerMinute: 999,
+    });
+    expect(GameSaveValidation.readGameSave(source)).toStrictEqual(validSave());
   });
 
   it.each([
@@ -91,7 +184,7 @@ describe('game save validation', () => {
       const mine = source.colonies[0].buildings[1];
       mine.completesAt = mine.startedAt + duration;
       mine.completed = completed;
-      expect(readGameSave(JSON.stringify(source))).toStrictEqual(source);
+      expect(GameSaveValidation.readGameSave(JSON.stringify(source))).toStrictEqual(source);
     },
   );
 
@@ -102,9 +195,9 @@ describe('game save validation', () => {
     ['non-object', false, 'корень'],
     ['missing version', {}, 'version'],
     ['string version', { version: '1' }, 'version'],
-    ['unsupported version', { version: 2 }, 'не поддерживается'],
+    ['unsupported version', { version: 4 }, 'не поддерживается'],
   ])('rejects %s', (_name, input: unknown, reason) => {
-    expect(() => readGameSave(input)).toThrow(`${reason}`);
+    expect(() => GameSaveValidation.readGameSave(input)).toThrow(`${reason}`);
   });
 
   it.each([
@@ -112,6 +205,8 @@ describe('game save validation', () => {
     'gameTime',
     'lastProductionTick',
     'credits',
+    'creditRemainder',
+    'maintenanceShortfall',
     'planets',
     'colonies',
     'nextBuildingId',
@@ -119,7 +214,7 @@ describe('game save validation', () => {
   ])('requires %s', (key) => {
     const source = validSave();
     Reflect.deleteProperty(source, key);
-    expect(() => readGameSave(source)).toThrow(key);
+    expect(() => GameSaveValidation.readGameSave(source)).toThrow(key);
   });
 
   const invalidCases: [string, (save: Fixture) => void, string][] = [
@@ -437,6 +532,6 @@ describe('game save validation', () => {
   it.each(invalidCases)('rejects %s with a field-specific reason', (_name, change, reason) => {
     const source = validSave();
     change(source);
-    expect(() => readGameSave(source)).toThrow(reason);
+    expect(() => GameSaveValidation.readGameSave(source)).toThrow(reason);
   });
 });

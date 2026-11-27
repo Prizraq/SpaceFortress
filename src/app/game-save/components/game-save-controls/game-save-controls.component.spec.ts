@@ -322,7 +322,7 @@ describe('GameSaveControlsComponent', () => {
 
   it.each([
     ['{"version":', 'JSON'],
-    ['{"version":2}', 'не поддерживается'],
+    ['{"version":4}', 'не поддерживается'],
   ])(
     'visibly rejects invalid storage %s without changing or overwriting the session',
     (raw, reason) => {

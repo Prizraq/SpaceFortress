@@ -11,6 +11,17 @@
     <span class="class-label">{{ data.athmosphere ? 'АТМОСФЕРА ОБНАРУЖЕНА' : 'БЕЗ АТМОСФЕРЫ' }}</span>
   </div>
   <button class="open-surface" type="button" (click)="opened.emit()">Открыть поверхность</button>
+  @if (finances(); as local) {
+    <section class="colony-finances" aria-label="Финансы колонии" data-panel-finances>
+      <p>Прогноз / игровую мин · общий бюджет</p>
+      <dl class="telemetry">
+        <div><dt>Налоговый доход</dt><dd>{{ numbers.format(local.income) }}</dd></div>
+        <div><dt>Расходы содержания</dt><dd>{{ numbers.format(local.maintenance) }}</dd></div>
+        <div [class.deficit]="local.balance < 0"><dt>Вклад колонии</dt><dd>{{ local.balance > 0 ? '+' : '' }}{{ numbers.format(local.balance) }}</dd></div>
+      </dl>
+      <p>Без разовых расходов строительства.</p>
+    </section>
+  }
   <div class="scan-status"><i></i><span>СПЕКТРАЛЬНЫЙ АНАЛИЗ</span><strong>100%</strong></div>
   <dl class="telemetry">
     <div><dt>Орбита</dt><dd>{{ data.distanceFromSun }} <small>а.е.</small></dd></div>

@@ -13,7 +13,7 @@ export class PowerStation extends Building {
   override readonly costGas = 10;
   readonly buildTime = 4;
   override readonly energyGain = 16;
-  override readonly workersRequired = 2;
+  override readonly workersRequired = 6;
 
   override energyGainFor(planet: Colony['planet']): number {
     if (!Number.isFinite(planet.distanceFromSun) || planet.distanceFromSun <= 0)

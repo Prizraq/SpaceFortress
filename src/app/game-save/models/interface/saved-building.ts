@@ -8,4 +8,5 @@ export interface SavedBuilding {
   readonly completesAt: number;
   readonly completed: boolean;
   readonly enabled: boolean;
+  readonly disabledByFinance: boolean;
 }

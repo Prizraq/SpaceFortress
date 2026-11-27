@@ -45,4 +45,5 @@ export const BUILDING_STATUS_LABELS: Readonly<Record<BuildingStatus, string>> = 
   [BuildingStatus.NoWater]: 'Недостаточно воды',
   [BuildingStatus.NoWorkers]: 'Нет работников',
   [BuildingStatus.Disabled]: 'Отключено',
+  [BuildingStatus.FinanciallyDisabled]: 'Отключено: недостаточно кредитов',
 };

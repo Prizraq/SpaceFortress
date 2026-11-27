@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readGameSave } from '../domain/game-save-validation';
+import * as GameSaveValidation from '../domain/game-save-validation';
 import { GameSessionService } from '../../game-session/services/game-session.service';
 import { GameSaveFileService } from './game-save-file.service';
 
@@ -47,7 +47,7 @@ describe('GameSaveFileService', () => {
     if (!(blob instanceof Blob)) throw new Error('Expected JSON Blob');
     expect(blob.type).toBe('application/json;charset=utf-8');
     const text = await files.read(new File([blob], 'roundtrip.json'), new AbortController().signal);
-    expect(readGameSave(text)).toEqual(saved);
+    expect(GameSaveValidation.readGameSave(text)).toEqual(saved);
     expect(document.querySelector('a[download]')).toBeNull();
     expect(revoke).not.toHaveBeenCalled();
     files.exportSave(saved);
@@ -55,6 +55,13 @@ describe('GameSaveFileService', () => {
     TestBed.resetTestingModule();
     expect(revoke).toHaveBeenCalledWith('blob:export-two');
     expect(revoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects corrupted v2 cents before starting a download', () => {
+    const saved = TestBed.inject(GameSessionService).createSave(new Date());
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    expect(() => files.exportSave({ ...saved, creditRemainder: 100 })).toThrow('creditRemainder');
+    expect(click).not.toHaveBeenCalled();
   });
 
   it('reads source text without altering whitespace or requiring valid JSON', async () => {

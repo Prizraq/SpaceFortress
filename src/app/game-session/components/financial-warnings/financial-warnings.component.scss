@@ -1,0 +1,37 @@
+:host {
+  position: fixed;
+  z-index: 5;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 32px));
+  font:
+    12px 'Bahnschrift',
+    'Trebuchet MS',
+    sans-serif;
+}
+.financial-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #8bc6bf24;
+  background: #0a171bb3;
+  box-shadow: 0 8px 24px #0004;
+  color: #e8c988;
+}
+p {
+  margin: 0;
+  line-height: 1.6;
+}
+button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button:focus-visible {
+  outline: 2px solid #efcc81;
+  outline-offset: 3px;
+}

@@ -1,4 +1,5 @@
 import { Planet } from '../../../shared/models/interface/planet';
+import { HEX_RADIUS } from './hex-map';
 
 type Color = readonly [number, number, number];
 
@@ -40,7 +41,7 @@ export function createSurfaceTexture(planet: Planet, width: number, height: numb
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas 2D is unavailable for the planet surface');
   const image = context.createImageData(canvas.width, canvas.height);
-  image.data.set(createSurfacePixels(planet, canvas.width, canvas.height));
+  image.data.set(createSurfacePixels(planet, canvas.width, canvas.height, scale));
   context.putImageData(image, 0, 0);
   return canvas.toDataURL('image/png');
 }
@@ -49,9 +50,12 @@ export function createSurfacePixels(
   planet: Planet,
   width: number,
   height: number,
+  pixelsPerUnit = 1,
 ): Uint8ClampedArray {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0)
     throw new RangeError('Planet surface dimensions must be positive integers');
+  if (!Number.isFinite(pixelsPerUnit) || pixelsPerUnit <= 0)
+    throw new RangeError('Planet surface scale must be finite and greater than zero');
   let seed = 2166136261;
   for (const character of planet.id) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
   const dry = !planet.athmosphere || planet.resourses.water < 20;
@@ -101,6 +105,12 @@ export function createSurfacePixels(
     for (let column = 0; column < width; column++) {
       const index = (row + 1) * stride + column + 1;
       const elevation = elevations[index];
+      const waterDepth = dry
+        ? -1
+        : Math.min(
+            waterline - elevation,
+            lakeDepth(column / pixelsPerUnit, row / pixelsPerUnit, seed, planet.resourses.water) * 0.12,
+          );
       const dx = ((elevations[index + 1] - elevations[index - 1]) * width) / 18;
       const dy = ((elevations[index + stride] - elevations[index - stride]) * width) / 18;
       const slope = Math.hypot(dx, dy);
@@ -108,13 +118,13 @@ export function createSurfacePixels(
         0.56 + 0.7 * Math.max(0, (dx * 0.5 + dy * 0.6 + 0.62) / Math.sqrt(1 + slope * slope));
       const grain = (hash(column, row, seed + 71) - 0.5) * 9;
       let color: Color;
-      if (elevation < waterline) {
-        color = mix(palette.deep, palette.shallow, smooth(waterline - 0.12, waterline, elevation));
+      if (waterDepth > 0) {
+        color = mix(palette.shallow, palette.deep, smooth(0, 0.12, waterDepth));
       } else {
         color = mix(palette.low, palette.high, smooth(0.35, 0.72, elevation));
         color = mix(color, palette.rock, smooth(0.35, 1.2, slope) * 0.8);
         if (!dry) {
-          color = mix(palette.shore, color, smooth(waterline, waterline + 0.025, elevation));
+          color = mix(palette.shore, color, smooth(0, 0.025, -waterDepth));
           color = mix(
             color,
             palette.snow,
@@ -122,7 +132,7 @@ export function createSurfacePixels(
           );
         }
       }
-      const illumination = elevation < waterline ? 0.94 : Math.min(1.12, light);
+      const illumination = waterDepth > 0 ? 0.94 : Math.min(1.12, light);
       const offset = (row * width + column) * 4;
       for (let channel = 0; channel < 3; channel++)
         pixels[offset + channel] = color[channel] * illumination + grain;
@@ -130,6 +140,18 @@ export function createSurfacePixels(
     }
   }
   return pixels;
+}
+
+function lakeDepth(x: number, y: number, seed: number, abundance: number): number {
+  const spacing = HEX_RADIUS * 3;
+  const column = Math.floor(x / spacing);
+  const row = Math.floor(y / spacing);
+  if (hash(column, row, seed + 83) > 0.15 + abundance * 0.006) return -1;
+  const cx = (column + 0.5) * spacing + (hash(column, row, seed + 97) - 0.5) * HEX_RADIUS * 0.5;
+  const cy = (row + 0.5) * spacing + (hash(column, row, seed + 109) - 0.5) * HEX_RADIUS * 0.5;
+  // Each lake fits inside a hex; separated centres prevent neighbouring lakes from merging.
+  const radius = HEX_RADIUS * 0.65 * (0.8 + noise(x / 12, y / 12, seed + 127) * 0.2);
+  return 1 - Math.hypot(x - cx, y - cy) / radius;
 }
 
 function hash(x: number, y: number, seed: number): number {

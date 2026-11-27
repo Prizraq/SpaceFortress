@@ -1,0 +1,8 @@
+@if (message(); as message) {
+  <div class="financial-message" data-financial-notification>
+    <p role="status">{{ message }}</p>
+    <button type="button" aria-label="Закрыть финансовое уведомление" (click)="dismiss()">
+      &times;
+    </button>
+  </div>
+}

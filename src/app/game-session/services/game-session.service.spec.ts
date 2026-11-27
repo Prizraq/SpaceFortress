@@ -1,17 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUILDINGS_BY_TYPE } from '../../planet/domain/building-catalogue';
-import { buildProblem } from '../../planet/domain/building-rules';
-import { allocateWorkers, colonyWorkforce } from '../../planet/domain/colony-workforce';
-import { demolitionProblem } from '../../planet/domain/demolition-rules';
-import {
-  advanceColony,
-  createColony,
-  foodEconomy,
-  freezeColony,
-  recalculateColonyWorkforce,
-  waterEconomy,
-} from '../../planet/domain/colony-simulation';
+import * as BuildingCatalogue from '../../planet/domain/building-catalogue';
+import * as BuildingRules from '../../planet/domain/building-rules';
+import * as ColonyWorkforce from '../../planet/domain/colony-workforce';
+import * as DemolitionRules from '../../planet/domain/demolition-rules';
+import * as ColonySimulation from '../../planet/domain/colony-simulation';
 import { BuildError } from '../../planet/models/enum/build-error';
 import { BuildingStatus } from '../../planet/models/enum/building-status';
 import { BuildingOperationError } from '../../planet/models/enum/building-operation-error';
@@ -30,7 +23,7 @@ describe('GameSessionService and simulation', () => {
   };
   const planets = () => new PlanetService().getPlanets();
   const completedColony = (...types: BuildingType[]) => {
-    const colony = createColony(planets()[1]);
+    const colony = ColonySimulation.createColony(planets()[1]);
     return {
       ...colony,
       stocks: { ...colony.stocks, population: 5, populationCapacity: 25 },
@@ -62,6 +55,480 @@ describe('GameSessionService and simulation', () => {
     vi.useRealTimers();
   });
 
+  it('loads v1 with unchanged purchasing power and starts taxes only on the next saved step', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const source = service.createSave(date);
+    const legacy = {
+      ...source,
+      version: 1, credits: 150, gameTime: 7000, lastProductionTick: 6000,
+      colonies: source.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 3 },
+      })),
+    };
+    Reflect.deleteProperty(legacy, 'creditRemainder');
+    Reflect.deleteProperty(legacy, 'maintenanceShortfall');
+    service.setSystemPaused(true);
+    delayCallbacks(86400000);
+    service.restoreSave(JSON.stringify(legacy));
+    service.setSystemPaused(false);
+    expect(service.createSave(date)).toMatchObject({
+      version: 3, credits: 150, creditRemainder: 0, gameTime: 7000, lastProductionTick: 6000,
+    });
+    expect(service.build(planet, BuildingType.Power, 1)).toBeNull();
+    expect(service.credits()).toBe(50);
+    vi.advanceTimersByTime(999);
+    service.tick();
+    expect(service.credits()).toBe(50);
+    vi.advanceTimersByTime(1);
+    service.tick();
+    expect(service.createSave(date)).toMatchObject({ credits: 50, creditRemainder: 60 });
+  });
+
+  it('measures the actual Terra construction chain and subsequent material and credit recovery', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    const chain: [BuildingType, number][] = [
+      [BuildingType.Base, 4000], [BuildingType.Power, 4000], [BuildingType.Housing, 6000],
+      [BuildingType.Water, 4000], [BuildingType.Farm, 6000], [BuildingType.Minerals, 6000],
+    ];
+    for (const [tile, [type, duration]] of chain.entries()) {
+      expect(service.build(planet, type, tile)).toBeNull();
+      vi.advanceTimersByTime(duration);
+    }
+    expect(service.clock()).toBe(30000);
+    expect(service.credits()).toBe(1258.6);
+    expect(service.colonies()[planet.id].stocks.population).toBe(13);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(15);
+    vi.advanceTimersByTime(16000);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(42.5);
+    expect(service.buildProblem(planet, BuildingType.Power)).toBeNull();
+    vi.advanceTimersByTime(18000);
+    expect(service.clock()).toBe(64000);
+    expect(service.credits()).toBe(1319.5);
+    expect(service.finances()).toMatchObject({ income: 150, maintenance: 15, balance: 135 });
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const mature = { ...service.createSave(date), credits: 0, creditRemainder: 0 };
+    service.restoreSave(mature);
+    vi.advanceTimersByTime(44000);
+    expect(service.buildProblem(planet, BuildingType.Power)).toBe(BuildError.Credits);
+    vi.advanceTimersByTime(2000);
+    expect(service.credits()).toBe(103.5);
+    expect(service.build(planet, BuildingType.Power, 6)).toBeNull();
+    vi.advanceTimersByTime(4000);
+    vi.advanceTimersByTime(52000);
+    expect(service.buildProblem(planet, BuildingType.Gas)).toBeNull();
+    expect(service.build(planet, BuildingType.Gas, 7)).toBeNull();
+    vi.advanceTimersByTime(6000);
+    expect(service.finances()).toMatchObject({ income: 150, maintenance: 30, balance: 120 });
+  });
+
+  it('rebuilds a credit reserve after spending the last credits on a base and free-maintenance power', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.restoreSave({ ...service.createSave(new Date()), credits: 200 });
+    expect(service.build(planet, BuildingType.Base, 0)).toBeNull();
+    expect(service.credits()).toBe(0);
+    vi.advanceTimersByTime(4000);
+    expect(service.credits()).toBe(0);
+    expect(service.colonies()[planet.id].stocks.population).toBe(5);
+    vi.advanceTimersByTime(200000);
+    expect(service.credits()).toBe(100);
+    expect(service.build(planet, BuildingType.Power, 1)).toBeNull();
+    expect(service.credits()).toBe(0);
+    vi.advanceTimersByTime(4000);
+    expect(service.credits()).toBe(2);
+    expect(service.finances()).toMatchObject({ income: 30, maintenance: 0, balance: 30 });
+    expect(service.colonies()[planet.id].buildings[1].disabledByFinance).toBe(false);
+  });
+
+  it('demonstrates a reachable local-resource dead end after cancelling first mines in every colony', () => {
+    const known = planets();
+    for (const planet of known) {
+      service.openPlanet(planet);
+      expect(service.build(planet, BuildingType.Base, 0)).toBeNull();
+    }
+    vi.advanceTimersByTime(4000);
+    for (const planet of known) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        for (let step = 0; step < 40 && service.credits() < 120; step++) vi.advanceTimersByTime(2000);
+        expect(service.build(planet, BuildingType.Minerals, 1)).toBeNull();
+        const site = service.colonies()[planet.id].buildings[1];
+        expect(service.demolish(planet, site.id)).toBeNull();
+      }
+    }
+    expect(service.clock()).toBe(512000);
+    expect(service.credits()).toBe(2);
+    vi.advanceTimersByTime(600000);
+    expect(service.credits()).toBe(902);
+    for (const planet of known) {
+      const colony = service.colonies()[planet.id];
+      expect(colony.stocks.population).toBe(5);
+      expect(colony.stocks.minerals).toBe(0);
+      expect(colony.deposits.minerals).toBeGreaterThan(0);
+      expect(colony.buildings).toHaveLength(1);
+      expect(service.buildProblem(planet, BuildingType.Minerals)).toBe(BuildError.Minerals);
+      expect(service.buildProblem(planet, BuildingType.Water)).toBe(BuildError.Minerals);
+    }
+    expect(service.finances()).toMatchObject({ income: 90, maintenance: 0, balance: 90 });
+  });
+
+  it.each([0, 2])('allows early expansion on planet %s with larger crews and limited initial population', (planetIndex) => {
+    const planet = planets()[planetIndex];
+    service.openPlanet(planet);
+    const build = (type: BuildingType) => {
+      const tile = service.colonies()[planet.id].buildings.length;
+      for (let step = 0; step < 100 && service.buildProblem(planet, type) !== null; step++) {
+        vi.advanceTimersByTime(2000);
+      }
+      expect(service.build(planet, type, tile)).toBeNull();
+      vi.advanceTimersByTime(service.definition(type).buildTime * 1000);
+    };
+    for (const type of [
+      BuildingType.Base, BuildingType.Power, BuildingType.Housing,
+      BuildingType.Water, BuildingType.Minerals, BuildingType.Power, BuildingType.Farm,
+    ]) {
+      build(type);
+    }
+    for (let step = 0; step < 100 && service.colonies()[planet.id].stocks.population < 25; step++) {
+      vi.advanceTimersByTime(2000);
+    }
+    expect(service.colonies()[planet.id].stocks.population).toBe(25);
+    expect(service.colonies()[planet.id].deposits.minerals).toBeLessThan(planet.resourses.minerals * 1000);
+    expect(service.finances()).toMatchObject({ income: 150, maintenance: 15, balance: 135 });
+    const workforce = ColonyWorkforce.colonyWorkforce(service.colonies()[planet.id]);
+    expect(workforce.employed).toBe(25);
+    const farm = service.colonies()[planet.id].buildings.find((building) => building.type === BuildingType.Farm)!;
+    expect(workforce.staffing(farm)).toBeCloseTo(4 / 6);
+  });
+
+  it('demonstrates water and gas bootstrap deadlock despite available credits and mineral deposits', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(6000);
+    vi.advanceTimersByTime(218000);
+    expect(service.colonies()[planet.id].stocks.water).toBe(21);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      expect(service.build(planet, BuildingType.Power, 2)).toBeNull();
+      expect(service.demolish(planet, service.colonies()[planet.id].buildings[2].id)).toBeNull();
+    }
+    expect(service.colonies()[planet.id].stocks.gas).toBe(0);
+    vi.advanceTimersByTime(62000);
+    const colony = service.colonies()[planet.id];
+    expect(colony.stocks.water).toBe(0);
+    expect(colony.stocks.minerals).toBeGreaterThan(35);
+    expect(colony.stocks.population).toBe(5);
+    expect(service.buildProblem(planet, BuildingType.Water)).toBe(BuildError.Gas);
+    expect(service.buildProblem(planet, BuildingType.Gas)).toBe(BuildError.Water);
+    service.toggleBuilding(planet, 2);
+    vi.advanceTimersByTime(600000);
+    expect(service.colonies()[planet.id].stocks.water).toBe(0);
+    expect(service.colonies()[planet.id].stocks.gas).toBe(0);
+    expect(service.credits()).toBeGreaterThan(120);
+    expect(service.buildProblem(planet, BuildingType.Water)).toBe(BuildError.Gas);
+    expect(service.buildProblem(planet, BuildingType.Gas)).toBe(BuildError.Water);
+  });
+
+  it.each([0, 1, 2])('verifies that the proposed bootstrap resources permit normal paid construction on planet %s', (planetIndex) => {
+    const planet = planets()[planetIndex];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    const source = service.createSave(new Date());
+    service.restoreSave({
+      ...source, credits: 210, creditRemainder: 0,
+      colonies: source.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, minerals: 55, water: 0, food: 0, gas: 5 },
+      })),
+    });
+    expect(service.build(planet, BuildingType.Water, 1)).toBeNull();
+    vi.advanceTimersByTime(4000);
+    for (let step = 0; step < 10 && service.colonies()[planet.id].stocks.water < 10; step++) {
+      vi.advanceTimersByTime(2000);
+    }
+    expect(service.build(planet, BuildingType.Minerals, 2)).toBeNull();
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(0);
+    expect(service.colonies()[planet.id].stocks.gas).toBe(0);
+    vi.advanceTimersByTime(6000);
+    vi.advanceTimersByTime(10000);
+    expect(service.colonies()[planet.id].stocks.minerals).toBeGreaterThan(0);
+    expect(service.colonies()[planet.id].stocks.population).toBe(5);
+    expect(service.finances()).toMatchObject({ income: 30, maintenance: 15, balance: 15 });
+  });
+
+  it.each([6000, 7000])('continues v3 saved at %s ms with fractional credits exactly as uninterrupted play', (savedTime) => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const source = service.createSave(date);
+    service.restoreSave({
+      ...source, credits: 10, creditRemainder: 73,
+      colonies: source.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 3 },
+      })),
+    });
+    vi.advanceTimersByTime(savedTime - 4000);
+    const saved = service.createSave(date);
+    expect(saved).toMatchObject({
+      version: 3, credits: 11, creditRemainder: 33,
+      lastProductionTick: 6000, gameTime: savedTime,
+    });
+    expect(saved).not.toHaveProperty('finances');
+    expect(saved).not.toHaveProperty('colonyFinances');
+    expect(saved.colonies[0]).not.toHaveProperty('income');
+    expect(saved.colonies[0].buildings[0]).not.toHaveProperty('maintenancePerMinute');
+    const remaining = 14000 - savedTime;
+    vi.advanceTimersByTime(remaining);
+    const uninterrupted = service.createSave(date);
+    expect(uninterrupted).toMatchObject({ credits: 15, creditRemainder: 13 });
+    service.setSystemPaused(true);
+    delayCallbacks(86400000);
+    service.restoreSave(JSON.stringify(saved));
+    expect(service.createSave(date)).toEqual(saved);
+    service.restoreSave(saved);
+    expect(service.createSave(date)).toEqual(saved);
+    service.setSystemPaused(false);
+    vi.advanceTimersByTime(remaining);
+    expect(service.createSave(date)).toEqual(uninterrupted);
+  });
+
+  it('starts base taxes on the next step, charges construction once and combines unopened colonies', () => {
+    const [first, second] = planets();
+    service.openPlanet(first);
+    service.openPlanet(second);
+    service.build(first, BuildingType.Base, 0);
+    service.build(second, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    expect(service.credits()).toBe(1600);
+    expect(service.finances()).toMatchObject({ income: 60, maintenance: 0, balance: 60 });
+    vi.advanceTimersByTime(60000);
+    expect(service.credits()).toBe(1660);
+    expect(service.colonyFinances().map((colony) => colony.balance)).toEqual([30, 30]);
+    service.tick();
+    service.tick();
+    expect(service.credits()).toBe(1660);
+  });
+
+  it('replays taxes with growth per step and preserves exact cents across a partial-step save', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Power, 1);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Water, 2);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Farm, 3);
+    vi.advanceTimersByTime(6000);
+    service.build(planet, BuildingType.Housing, 4);
+    vi.advanceTimersByTime(8000);
+    expect(service.build(planet, BuildingType.Minerals, 5)).toBeNull();
+    vi.advanceTimersByTime(6000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const start = { ...service.createSave(date), credits: 0, creditRemainder: 0 };
+    service.restoreSave(start);
+    vi.advanceTimersByTime(7000);
+    const partial = service.createSave(date);
+    expect(partial.credits).toBe(4);
+    expect(partial.creditRemainder).toBe(50);
+    expect(partial.gameTime - partial.lastProductionTick).toBe(1000);
+    vi.advanceTimersByTime(33000);
+    const regular = service.createSave(date);
+    expect(service.colonies()[planet.id].stocks.population).toBe(25);
+    expect(service.credits()).toBe(62.8);
+    expect(service.finances()).toMatchObject({ income: 150, maintenance: 15, balance: 135 });
+    service.restoreSave(start);
+    delayCallbacks(40000);
+    service.tick();
+    expect(service.createSave(date)).toEqual(regular);
+    service.restoreSave(partial);
+    delayCallbacks(86400000);
+    service.restoreSave(partial);
+    delayCallbacks(33000);
+    service.tick();
+    expect(service.createSave(date)).toEqual(regular);
+    vi.advanceTimersByTime(32000);
+    expect(service.credits()).toBe(134.8);
+  });
+
+  it('uses the population before each starvation step rather than the final population for delayed taxes', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const saved = service.createSave(date);
+    const starving = {
+      ...saved, credits: 0,
+      colonies: saved.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, water: 0, food: 0, population: 8 },
+      })),
+    };
+    service.restoreSave(starving);
+    vi.advanceTimersByTime(6000);
+    const regular = service.createSave(date);
+    expect(service.credits()).toBe(4.2);
+    expect(service.colonies()[planet.id].stocks.population).toBe(5);
+    service.restoreSave(starving);
+    delayCallbacks(6000);
+    service.tick();
+    expect(service.createSave(date)).toEqual(regular);
+  });
+
+  it('disables unaffordable mines before production and preserves their financial reason on load', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Minerals, 1);
+    service.build(planet, BuildingType.Gas, 2);
+    vi.advanceTimersByTime(6000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const saved = service.createSave(date);
+    service.restoreSave({
+      ...saved, credits: 0, creditRemainder: 0,
+      colonies: saved.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 1 },
+      })),
+    });
+    const minerals = service.colonies()[planet.id].stocks.minerals;
+    expect(service.finances()).toMatchObject({ income: 6, maintenance: 30, balance: -24 });
+    vi.advanceTimersByTime(2000);
+    expect(service.credits()).toBe(0.2);
+    expect(service.maintenanceShortfall()).toBe(0);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(minerals);
+    expect(service.colonies()[planet.id].buildings.slice(1).every((building) =>
+      !building.enabled && building.disabledByFinance &&
+      building.status === BuildingStatus.FinanciallyDisabled,
+    )).toBe(true);
+    const accrued = service.createSave(date);
+    service.restoreSave(JSON.stringify(accrued));
+    expect(service.credits()).toBe(0.2);
+    service.toggleBuilding(planet, 2);
+    service.toggleBuilding(planet, 3);
+    vi.advanceTimersByTime(2000);
+    expect(service.maintenanceShortfall()).toBe(0);
+    expect(service.credits()).toBe(0.1);
+  });
+
+  it.each(['manual', 'hidden', 'system'])('never accrues finances during %s pause', (reason) => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(7000);
+    const stop = (paused: boolean) => {
+      if (reason === 'manual') service.setManualPaused(paused);
+      else if (reason === 'system') service.setSystemPaused(paused);
+      else {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(paused ? 'hidden' : 'visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+      }
+    };
+    stop(true);
+    const saved = service.createSave(new Date());
+    delayCallbacks(86400000);
+    stop(false);
+    expect(service.createSave(new Date())).toMatchObject({
+      credits: saved.credits, creditRemainder: saved.creditRemainder, gameTime: saved.gameTime,
+    });
+    vi.advanceTimersByTime(1000);
+    service.tick();
+    expect(service.credits()).toBe(saved.credits + saved.creditRemainder / 100 + 0.5);
+  });
+
+  it.each(['toggle', 'demolish'])('settles past maintenance before %s without retroactive or future charges', (command) => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(6000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    service.restoreSave({ ...service.createSave(date), credits: 10, creditRemainder: 73 });
+    delayCallbacks(2000);
+    expect(command === 'toggle' ? service.toggleBuilding(planet, 2) : service.demolish(planet, 2)).toBeNull();
+    expect(service.credits()).toBe(11.23);
+    delayCallbacks(4000);
+    service.tick();
+    expect(service.credits()).toBe(13.23);
+  });
+
+  it('preserves a manual disable intent when the pending step disables that mine financially', () => {
+    const planet = planets()[1];
+    service.openPlanet(planet);
+    service.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    service.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(6000);
+    const source = service.createSave(new Date());
+    service.restoreSave({
+      ...source, credits: 0, creditRemainder: 0,
+      colonies: source.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 1 },
+      })),
+    });
+    delayCallbacks(2000);
+    expect(service.toggleBuilding(planet, 2)).toBeNull();
+    expect(service.colonies()[planet.id].buildings[1]).toMatchObject({
+      enabled: false, disabledByFinance: false, status: BuildingStatus.Disabled,
+    });
+    expect(service.credits()).toBe(0.2);
+  });
+
+  it('replays shared-budget shutdowns chronologically and resumes a partial save regardless of colony order', () => {
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const source: GameSave = {
+      ...service.createSave(date), gameTime: 10000, lastProductionTick: 10000,
+      credits: 0, creditRemainder: 20, nextBuildingId: 12,
+      colonies: planets().slice(0, 2).map((planet, index) => ({
+        planetId: planet.id,
+        stocks: { minerals: 100, water: 100, food: 100, gas: 100, population: 1 },
+        deposits: { minerals: 1000, gas: 1000 },
+        buildings: [BuildingType.Base, index === 0 ? BuildingType.Minerals : BuildingType.Gas]
+          .map((type, buildingIndex) => ({
+            id: (index === 0 ? 1 : 10) + buildingIndex, type, tile: buildingIndex,
+            startedAt: type === BuildingType.Base ? 0 : 4000,
+            completesAt: type === BuildingType.Base ? 4000 : 10000,
+            completed: true, enabled: true, disabledByFinance: false,
+          })),
+      })),
+    };
+    const normalize = (save: GameSave) => ({
+      ...save, colonies: [...save.colonies].sort((a, b) => a.planetId.localeCompare(b.planetId)),
+    });
+    service.restoreSave(source);
+    vi.advanceTimersByTime(2500);
+    const partial = service.createSave(date);
+    expect(partial).toMatchObject({ credits: 0, creditRemainder: 10, gameTime: 12500, lastProductionTick: 12000 });
+    expect(partial.colonies[1].buildings[1].disabledByFinance).toBe(true);
+    vi.advanceTimersByTime(7500);
+    const regular = service.createSave(date);
+    expect(service.credits()).toBe(3.7);
+    service.restoreSave({ ...source, colonies: [...source.colonies].reverse() });
+    delayCallbacks(10000);
+    service.tick();
+    expect(normalize(service.createSave(date))).toEqual(normalize(regular));
+    delayCallbacks(86400000);
+    service.restoreSave(JSON.stringify({ ...partial, colonies: [...partial.colonies].reverse() }));
+    expect(normalize(service.createSave(date))).toEqual(normalize(partial));
+    delayCallbacks(7500);
+    service.tick();
+    expect(normalize(service.createSave(date))).toEqual(normalize(regular));
+    expect(service.colonies()[source.colonies[1].planetId].buildings[1]).toMatchObject({
+      enabled: false, disabledByFinance: true, status: BuildingStatus.FinanciallyDisabled,
+    });
+  });
+
   it('keeps freezing separate from recalculating staffing-derived energy and statuses', () => {
     const initial = completedColony(BuildingType.Base, BuildingType.Power, BuildingType.Water);
     const source: Colony = {
@@ -72,18 +539,55 @@ describe('GameSessionService and simulation', () => {
         status: BuildingStatus.NoWorkers,
       })),
     };
-    const frozen = freezeColony(source);
+    const frozen = ColonySimulation.freezeColony(source);
     expect(frozen).toEqual(source);
     expect(frozen.stocks.energy).toBe(999);
     expect(frozen.buildings[1].status).toBe(BuildingStatus.NoWorkers);
 
-    const recalculated = recalculateColonyWorkforce(frozen);
-    expect(recalculated.stocks).toEqual({ ...source.stocks, energy: 21 });
-    expect(
-      recalculated.buildings.every((building) => building.status === BuildingStatus.Working),
-    ).toBe(true);
+    const recalculated = ColonySimulation.recalculateColonyWorkforce(frozen);
+    expect(recalculated.stocks.energy).toBeCloseTo(10 + 16 * 5 / 6 - 5);
+    expect(recalculated.buildings.map((building) => building.status)).toEqual([
+      BuildingStatus.Working, BuildingStatus.Working, BuildingStatus.NoWorkers,
+    ]);
     expect(frozen).toEqual(source);
   });
+
+  it('keeps taxes and idle maintenance exact over 24 hours, matching delayed steps and preserving the partial phase', () => {
+    const [first, second] = planets();
+    for (const planet of [first, second]) {
+      service.openPlanet(planet);
+      service.build(planet, BuildingType.Base, 0);
+    }
+    vi.advanceTimersByTime(4000);
+    service.build(first, BuildingType.Minerals, 1);
+    service.build(second, BuildingType.Minerals, 1);
+    service.build(second, BuildingType.Gas, 2);
+    vi.advanceTimersByTime(7000);
+    const date = new Date('2030-01-01T00:00:00.000Z');
+    const saved = service.createSave(date);
+    const source: GameSave = {
+      ...saved, credits: 10, creditRemainder: 73,
+      colonies: saved.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, water: 0, food: 0 },
+      })),
+    };
+    service.restoreSave(source);
+    expect(service.finances()).toMatchObject({ income: 60, maintenance: 45, balance: 15 });
+    vi.advanceTimersByTime(86400000);
+    const regular = service.createSave(date);
+    expect(regular).toMatchObject({
+      credits: 21610, creditRemainder: 73, maintenanceShortfall: 0,
+      gameTime: 86411000, lastProductionTick: 86410000,
+    });
+    expect(regular.colonies.map((colony) => colony.stocks.population)).toEqual([5, 5]);
+    expect(regular.colonies.flatMap((colony) => colony.buildings).every((building) => building.enabled)).toBe(true);
+    service.restoreSave(JSON.stringify(source));
+    delayCallbacks(86400000);
+    service.tick();
+    expect(service.createSave(date)).toEqual(regular);
+    service.tick();
+    expect(service.createSave(date)).toEqual(regular);
+  }, 30000);
 
   it('starts at zero and shares monotonic time across colonies regardless of calendar changes', () => {
     expect(service.clock()).toBe(0);
@@ -134,6 +638,11 @@ describe('GameSessionService and simulation', () => {
     vi.advanceTimersByTime(4000);
     service.build(planet, BuildingType.Minerals, 1);
     service.setManualPaused(true);
+    service.restoreSave({
+      ...service.createSave(new Date()),
+      creditRemainder: 73,
+      maintenanceShortfall: 125,
+    });
     service.setSystemPaused(stopped);
     const oldPlanets = service.planets();
     const oldColonies = service.colonies();
@@ -145,6 +654,8 @@ describe('GameSessionService and simulation', () => {
     expect(Object.isFrozen(service.planets()[1].resourses)).toBe(true);
     expect(service.createSave(new Date())).toMatchObject({
       credits: 2000,
+      creditRemainder: 0,
+      maintenanceShortfall: 0,
       colonies: [],
       gameTime: 0,
       lastProductionTick: 0,
@@ -183,8 +694,8 @@ describe('GameSessionService and simulation', () => {
     expect(service.colonies()[planet.id]).toBe(snapshot);
     vi.advanceTimersByTime(1);
     const next = service.colonies()[planet.id];
-    expect(next.stocks.minerals).toBe(snapshot.stocks.minerals + 11);
-    expect(next.deposits.minerals).toBe(snapshot.deposits.minerals - 11);
+    expect(next.stocks.minerals).toBe(snapshot.stocks.minerals + 9.2);
+    expect(next.deposits.minerals).toBe(snapshot.deposits.minerals - 9.2);
     expect(next.buildings[2]).toMatchObject({
       startedAt: time,
       completesAt: time + 4000,
@@ -248,8 +759,8 @@ describe('GameSessionService and simulation', () => {
       expect(service.colonies()[planet.id]).toBe(completed);
       vi.advanceTimersByTime(1);
       const produced = service.colonies()[planet.id];
-      expect(produced.stocks.minerals).toBe(initial.stocks.minerals + 11);
-      expect(produced.deposits.minerals).toBe(initial.deposits.minerals - 11);
+      expect(produced.stocks.minerals).toBe(initial.stocks.minerals + 9.2);
+      expect(produced.deposits.minerals).toBe(initial.deposits.minerals - 9.2);
       service.tick();
       expect(service.colonies()[planet.id]).toBe(produced);
     },
@@ -294,7 +805,7 @@ describe('GameSessionService and simulation', () => {
     service.setSystemPaused(true);
     expect(service.clock()).toBe(13000);
     const stopped = service.colonies()[planet.id];
-    expect(stopped.stocks.minerals).toBe(before.stocks.minerals + 11);
+    expect(stopped.stocks.minerals).toBe(before.stocks.minerals + 9.2);
     expect(stopped.buildings[2].completed).toBe(false);
     const credits = service.credits();
     vi.advanceTimersByTime(60000);
@@ -313,7 +824,7 @@ describe('GameSessionService and simulation', () => {
     const resumed = service.colonies()[planet.id];
     expect(service.clock()).toBe(14000);
     expect(resumed.buildings[2].completed).toBe(true);
-    expect(resumed.stocks.minerals).toBe(stopped.stocks.minerals + 11);
+    expect(resumed.stocks.minerals).toBeCloseTo(stopped.stocks.minerals + 9.2);
     service.tick();
     expect(service.colonies()[planet.id]).toBe(resumed);
   });
@@ -463,7 +974,7 @@ describe('GameSessionService and simulation', () => {
     ).toHaveLength(1);
   });
 
-  it('produces minerals and gas every two seconds without consuming reserved energy', () => {
+  it('produces with available workers every two seconds without consuming reserved energy', () => {
     const planet = planets()[1];
     service.openPlanet(planet);
     service.build(planet, BuildingType.Base, 0);
@@ -478,15 +989,15 @@ describe('GameSessionService and simulation', () => {
     expect(service.colonies()[planet.id]).toBe(before);
     vi.advanceTimersByTime(1);
     const after = service.colonies()[planet.id];
-    expect(after.stocks.minerals).toBe(before.stocks.minerals + 11);
-    expect(after.stocks.gas).toBe(before.stocks.gas + 5);
+    expect(after.stocks.minerals).toBe(before.stocks.minerals + 9.2);
+    expect(after.stocks.gas).toBe(before.stocks.gas);
     expect(after.stocks.population).toBe(5);
-    expect(after.deposits.minerals).toBe(before.deposits.minerals - 11);
-    expect(after.deposits.gas).toBe(before.deposits.gas - 5);
+    expect(after.deposits.minerals).toBe(before.deposits.minerals - 9.2);
+    expect(after.deposits.gas).toBe(before.deposits.gas);
     expect(after.stocks.energy).toBe(0);
     vi.advanceTimersByTime(6000);
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(after.stocks.minerals + 33);
-    expect(service.colonies()[planet.id].stocks.gas).toBe(after.stocks.gas + 15);
+    expect(service.colonies()[planet.id].stocks.minerals).toBeCloseTo(after.stocks.minerals + 27.6);
+    expect(service.colonies()[planet.id].stocks.gas).toBe(after.stocks.gas);
     expect(service.colonies()[planet.id].stocks.energy).toBe(0);
   });
 
@@ -494,12 +1005,12 @@ describe('GameSessionService and simulation', () => {
     const planet = planets()[1];
     service.openPlanet(planet);
     const colony = service.colonies()[planet.id];
-    expect(buildProblem(colony, 0, BUILDINGS_BY_TYPE[BuildingType.Base])).toBe('credits');
+    expect(BuildingRules.buildProblem(colony, 0, BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Base])).toBe('credits');
     expect(
-      buildProblem(
+      BuildingRules.buildProblem(
         { ...colony, stocks: { ...colony.stocks, minerals: 0 } },
         2000,
-        BUILDINGS_BY_TYPE[BuildingType.Base],
+        BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Base],
       ),
     ).toBe('minerals');
     expect(service.colonies()[planet.id]).toBe(colony);
@@ -514,14 +1025,18 @@ describe('GameSessionService and simulation', () => {
     service.build(planet, BuildingType.Gas, 2);
     vi.advanceTimersByTime(6000);
     const snapshot = service.colonies()[planet.id];
-    const depleted = advanceColony(
-      { ...snapshot, deposits: { minerals: 3, gas: 2 } },
+    const depleted = ColonySimulation.advanceColony(
+      {
+        ...snapshot,
+        stocks: { ...snapshot.stocks, population: 12, populationCapacity: 12 },
+        deposits: { minerals: 3, gas: 2 },
+      },
       service.clock(),
     );
     expect(depleted.stocks.minerals).toBe(snapshot.stocks.minerals + 3);
     expect(depleted.stocks.gas).toBe(snapshot.stocks.gas + 2);
     expect(depleted.deposits).toEqual({ minerals: 0, gas: 0 });
-    expect(advanceColony(depleted, service.clock()).buildings[1].status).toBe('depleted');
+    expect(ColonySimulation.advanceColony(depleted, service.clock()).buildings[1].status).toBe('depleted');
     expect(service.colonies()[planet.id]).toBe(snapshot);
   });
 
@@ -542,12 +1057,12 @@ describe('GameSessionService and simulation', () => {
     expect(service.colonies()[planet.id].stocks.energy).toBe(5);
     vi.advanceTimersByTime(1);
     const before = service.colonies()[planet.id].stocks;
-    expect(before.energy).toBe(5 + power);
+    expect(before.energy).toBeCloseTo(5 + power / 3);
     vi.advanceTimersByTime(2000);
     expect(service.colonies()[planet.id].stocks.water).toBe(before.water + water);
-    expect(service.colonies()[planet.id].stocks.energy).toBe(5 + power);
+    expect(service.colonies()[planet.id].stocks.energy).toBeCloseTo(5 + power / 3);
     vi.advanceTimersByTime(20000);
-    expect(service.colonies()[planet.id].stocks.energy).toBe(5 + power);
+    expect(service.colonies()[planet.id].stocks.energy).toBeCloseTo(5 + power / 3);
     const [base, waterStation, powerStation] = service.colonies()[planet.id].buildings;
     expect(service.demolish(planet, waterStation.id)).toBeNull();
     expect(service.demolish(planet, powerStation.id)).toBeNull();
@@ -585,7 +1100,7 @@ describe('GameSessionService and simulation', () => {
     const initial = service.colonies()[planet.id];
     const start = service.clock();
     let expected = initial;
-    for (let step = 1; step <= 12; step++) expected = advanceColony(expected, start + step * 2000);
+    for (let step = 1; step <= 12; step++) expected = ColonySimulation.advanceColony(expected, start + step * 2000);
     delayCallbacks(24000);
     service.tick();
     expect(service.colonies()[planet.id]).toEqual(expected);
@@ -622,11 +1137,11 @@ describe('GameSessionService and simulation', () => {
     delayCallbacks(2000);
     service.tick();
     const produced = service.colonies()[planet.id];
-    expect(produced.stocks.minerals).toBe(minerals + 11);
+    expect(produced.stocks.minerals).toBe(minerals + 9.2);
     service.tick();
     expect(service.colonies()[planet.id]).toBe(produced);
     vi.advanceTimersByTime(2000);
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(minerals + 22);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(minerals + 18.4);
   });
 
   it('shares finite deposits by placement id independently of array order', () => {
@@ -639,9 +1154,10 @@ describe('GameSessionService and simulation', () => {
     vi.advanceTimersByTime(6000);
     const snapshot = service.colonies()[planet.id];
     const results = [snapshot.buildings, [...snapshot.buildings].reverse()].map((buildings) =>
-      advanceColony(
+      ColonySimulation.advanceColony(
         {
           ...snapshot,
+          stocks: { ...snapshot.stocks, population: 12, populationCapacity: 12 },
           buildings,
           deposits: { minerals: 15, gas: 0 },
         },
@@ -672,9 +1188,9 @@ describe('GameSessionService and simulation', () => {
     expect(service.build(planet, BuildingType.Power, 3)).toBeNull();
     expect(service.build(planet, BuildingType.Gas, 4)).toBe('energy');
     vi.advanceTimersByTime(4000);
-    expect(service.colonies()[planet.id].stocks.energy).toBe(16);
+    expect(service.colonies()[planet.id].stocks.energy).toBeCloseTo(16 / 3);
     expect(service.build(planet, BuildingType.Gas, 4)).toBeNull();
-    expect(service.colonies()[planet.id].stocks.energy).toBe(11);
+    expect(service.colonies()[planet.id].stocks.energy).toBeCloseTo(16 / 3 - 5);
   });
 
   it('grows population only up to completed housing capacity and resumes with more housing', () => {
@@ -693,14 +1209,14 @@ describe('GameSessionService and simulation', () => {
           : building,
       ),
     };
-    colony = advanceColony(colony, 4000);
+    colony = ColonySimulation.advanceColony(colony, 4000);
     expect(colony.stocks.populationCapacity).toBe(5);
-    colony = advanceColony(colony, 6000);
+    colony = ColonySimulation.advanceColony(colony, 6000);
     expect(colony.stocks.population).toBe(5);
     expect(colony.stocks.populationCapacity).toBe(25);
-    colony = advanceColony(colony, 8000);
+    colony = ColonySimulation.advanceColony(colony, 8000);
     expect(colony.stocks.population).toBe(6);
-    for (let now = 10000; now <= 80000; now += 2000) colony = advanceColony(colony, now);
+    for (let now = 10000; now <= 80000; now += 2000) colony = ColonySimulation.advanceColony(colony, now);
     expect(colony.stocks.population).toBe(25);
     colony = {
       ...colony,
@@ -709,10 +1225,10 @@ describe('GameSessionService and simulation', () => {
         { ...initial.buildings[1], id: 2, tile: 2, completed: false, completesAt: 86000 },
       ],
     };
-    colony = advanceColony(colony, 86000);
+    colony = ColonySimulation.advanceColony(colony, 86000);
     expect(colony.stocks.population).toBe(25);
     expect(colony.stocks.populationCapacity).toBe(45);
-    for (let now = 88000; now <= 140000; now += 2000) colony = advanceColony(colony, now);
+    for (let now = 88000; now <= 140000; now += 2000) colony = ColonySimulation.advanceColony(colony, now);
     expect(colony.stocks.population).toBe(45);
   });
 
@@ -720,38 +1236,38 @@ describe('GameSessionService and simulation', () => {
     const initial = completedColony(BuildingType.Base, BuildingType.Minerals, BuildingType.Gas);
     initial.stocks.water = 0;
     initial.stocks.population = 6;
-    expect(waterEconomy(initial).balance).toBe(-2.1);
-    expect(waterEconomy(initial).populationSupplied).toBe(false);
-    const starved = advanceColony(initial, 0);
+    expect(ColonySimulation.waterEconomy(initial).balance).toBe(-1.1);
+    expect(ColonySimulation.waterEconomy(initial).populationSupplied).toBe(false);
+    const starved = ColonySimulation.advanceColony(initial, 0);
     expect(starved.stocks.water).toBe(0);
     expect(starved.stocks.population).toBe(5);
     expect(starved.stocks.minerals).toBe(initial.stocks.minerals);
     expect(starved.stocks.gas).toBe(initial.stocks.gas);
     expect(starved.buildings.slice(1).map((building) => building.status)).toEqual([
       BuildingStatus.NoWater,
-      BuildingStatus.NoWater,
+      BuildingStatus.NoWorkers,
     ]);
-    expect(waterEconomy(starved).balance).toBe(-2);
-    expect(waterEconomy(starved).populationSupplied).toBe(true);
-    const supplied = advanceColony({ ...starved, stocks: { ...starved.stocks, water: 2 } }, 2000);
-    expect(supplied.stocks.water).toBe(0);
+    expect(ColonySimulation.waterEconomy(starved).balance).toBe(-1);
+    expect(ColonySimulation.waterEconomy(starved).populationSupplied).toBe(true);
+    const supplied = ColonySimulation.advanceColony({ ...starved, stocks: { ...starved.stocks, water: 2 } }, 2000);
+    expect(supplied.stocks.water).toBe(1);
     expect(supplied.stocks.population).toBe(6);
-    expect(supplied.stocks.minerals).toBe(initial.stocks.minerals + 11);
-    expect(supplied.stocks.gas).toBe(initial.stocks.gas + 5);
-    expect(supplied.buildings.every((building) => building.status === BuildingStatus.Working)).toBe(
-      true,
-    );
+    expect(supplied.stocks.minerals).toBe(initial.stocks.minerals + 9.2);
+    expect(supplied.stocks.gas).toBe(initial.stocks.gas);
+    expect(supplied.buildings[1].status).toBe(BuildingStatus.Working);
+    expect(supplied.buildings[2].status).toBe(BuildingStatus.NoWorkers);
     expect(initial.stocks.water).toBe(0);
   });
 
   it('does not partially charge a stalled mine and allocates scarce water by placement id', () => {
     const initial = completedColony(BuildingType.Base, BuildingType.Minerals, BuildingType.Gas);
+    initial.stocks.population = 12;
     initial.stocks.water = 1.9;
     const results = [initial.buildings, [...initial.buildings].reverse()].map((buildings) =>
-      advanceColony({ ...initial, buildings }, 0),
+      ColonySimulation.advanceColony({ ...initial, buildings }, 0),
     );
     expect(results[0].stocks).toEqual(results[1].stocks);
-    expect(results[0].stocks.water).toBe(0.9);
+    expect(results[0].stocks.water).toBe(0.2);
     expect(results[0].stocks.minerals).toBe(initial.stocks.minerals + 11);
     expect(results[0].stocks.gas).toBe(initial.stocks.gas);
     expect(results[0].deposits.gas).toBe(initial.deposits.gas);
@@ -770,14 +1286,14 @@ describe('GameSessionService and simulation', () => {
       deposits: { minerals: 3, gas: 1000 },
     };
     initial.stocks.water = 0;
-    initial.stocks.population = 7;
-    const result = advanceColony(initial, 0);
-    expect(result.stocks.water).toBe(9.8);
-    expect(result.stocks.population).toBe(8);
+    initial.stocks.population = 21;
+    const result = ColonySimulation.advanceColony(initial, 0);
+    expect(result.stocks.water).toBe(8.4);
+    expect(result.stocks.population).toBe(22);
     expect(result.stocks.minerals).toBe(initial.stocks.minerals + 3);
     expect(result.stocks.gas).toBe(initial.stocks.gas + 5);
-    const next = advanceColony(result, 2000);
-    expect(next.stocks.water).toBe(20.5);
+    const next = ColonySimulation.advanceColony(result, 2000);
+    expect(next.stocks.water).toBe(17.7);
     expect(next.buildings[1].status).toBe(BuildingStatus.Depleted);
     const unfinished = {
       ...initial,
@@ -786,8 +1302,8 @@ describe('GameSessionService and simulation', () => {
       ),
       deposits: { minerals: 0, gas: initial.deposits.gas },
     };
-    expect(waterEconomy(unfinished).balance).toBe(11.8);
-    expect(waterEconomy(unfinished).populationSupplied).toBe(true);
+    expect(ColonySimulation.waterEconomy(unfinished).balance).toBe(10.4);
+    expect(ColonySimulation.waterEconomy(unfinished).populationSupplied).toBe(true);
   });
 
   it('keeps fractional consumption exact and replays starvation after delayed callbacks', () => {
@@ -796,9 +1312,9 @@ describe('GameSessionService and simulation', () => {
       ...initial,
       stocks: { ...initial.stocks, water: 1, population: 6, populationCapacity: 6 },
     };
-    for (let step = 0; step < 10; step++) expected = advanceColony(expected, step * 2000);
+    for (let step = 0; step < 10; step++) expected = ColonySimulation.advanceColony(expected, step * 2000);
     expect(expected.stocks.water).toBe(0);
-    expect(advanceColony(expected, 20000).stocks.population).toBe(5);
+    expect(ColonySimulation.advanceColony(expected, 20000).stocks.population).toBe(5);
     const planet = planets()[1];
     service.openPlanet(planet);
     service.build(planet, BuildingType.Base, 0);
@@ -806,7 +1322,7 @@ describe('GameSessionService and simulation', () => {
     service.build(planet, BuildingType.Housing, 1);
     const start = service.clock();
     let delayed = service.colonies()[planet.id];
-    for (let step = 1; step <= 120; step++) delayed = advanceColony(delayed, start + step * 2000);
+    for (let step = 1; step <= 120; step++) delayed = ColonySimulation.advanceColony(delayed, start + step * 2000);
     delayCallbacks(240000);
     service.tick();
     expect(service.colonies()[planet.id]).toEqual(delayed);
@@ -832,7 +1348,7 @@ describe('GameSessionService and simulation', () => {
     expect(completed.stocks.food).toBe(initial.food);
     vi.advanceTimersByTime(2000);
     const producing = service.colonies()[wet.id];
-    expect(producing.stocks.food).toBe(completed.stocks.food + 4);
+    expect(producing.stocks.food).toBe(completed.stocks.food + 3.3);
     expect(producing.stocks.water).toBe(completed.stocks.water - 1);
     expect(producing.stocks.population).toBe(5);
   });
@@ -849,15 +1365,15 @@ describe('GameSessionService and simulation', () => {
       stocks: { ...initial.stocks, food: 0, population: 30, populationCapacity: 50 },
     };
     for (let step = 1; step <= 5; step++) {
-      colony = advanceColony(colony, step * 2000);
+      colony = ColonySimulation.advanceColony(colony, step * 2000);
       expect(colony.stocks.population).toBe(30 - step);
       expect(colony.stocks.food).toBe(0);
     }
-    for (let step = 6; step <= 30; step++) colony = advanceColony(colony, step * 2000);
+    for (let step = 6; step <= 30; step++) colony = ColonySimulation.advanceColony(colony, step * 2000);
     expect(colony.stocks.population).toBe(25);
     expect(colony.stocks.food).toBe(0);
-    expect(foodEconomy(colony).balance).toBe(0);
-    colony = advanceColony(
+    expect(ColonySimulation.foodEconomy(colony).balance).toBe(0);
+    colony = ColonySimulation.advanceColony(
       { ...colony, buildings: [...colony.buildings, { ...initial.buildings[2], id: 4, tile: 4 }] },
       62000,
     );
@@ -872,7 +1388,7 @@ describe('GameSessionService and simulation', () => {
     { food: 1.2, population: 11, remaining: 0.2 },
   ])('handles the exact food boundary with $food food', ({ food, population, remaining }) => {
     const initial = completedColony(BuildingType.Base);
-    const result = advanceColony(
+    const result = ColonySimulation.advanceColony(
       { ...initial, stocks: { ...initial.stocks, food, population: 10 } },
       0,
     );
@@ -882,22 +1398,23 @@ describe('GameSessionService and simulation', () => {
 
   it('accounts for water shortages in food output and prioritizes farms over mines', () => {
     const initial = completedColony(BuildingType.Base, BuildingType.Minerals, BuildingType.Farm);
-    const dry = { ...initial, stocks: { ...initial.stocks, water: 0.4, food: 0 } };
-    expect(foodEconomy(dry)).toEqual({ production: 1, consumption: 1, balance: 0 });
-    const starved = advanceColony(dry, 0);
-    expect(starved.stocks.population).toBe(5);
+    initial.stocks.population = 12;
+    const dry = { ...initial, stocks: { ...initial.stocks, water: 1, food: 0 } };
+    expect(ColonySimulation.foodEconomy(dry)).toEqual({ production: 1, consumption: 2.4, balance: -1.4 });
+    const starved = ColonySimulation.advanceColony(dry, 0);
+    expect(starved.stocks.population).toBe(11);
     expect(starved.buildings[2].status).toBe(BuildingStatus.NoWater);
-    const supplied = { ...initial, stocks: { ...initial.stocks, water: 1.5, food: 0 } };
+    const supplied = { ...initial, stocks: { ...initial.stocks, water: 2, food: 0 } };
     const results = [supplied.buildings, [...supplied.buildings].reverse()].map((buildings) =>
-      advanceColony({ ...supplied, buildings }, 0),
+      ColonySimulation.advanceColony({ ...supplied, buildings }, 0),
     );
     expect(results[0].stocks).toEqual(results[1].stocks);
-    expect(results[0].stocks.food).toBe(4);
-    expect(results[0].stocks.water).toBe(0.5);
+    expect(results[0].stocks.food).toBe(2.6);
+    expect(results[0].stocks.water).toBe(0.3);
     expect(results[0].stocks.minerals).toBe(initial.stocks.minerals);
     expect(results[0].buildings[1].status).toBe(BuildingStatus.NoWater);
     expect(results[0].buildings[2].status).toBe(BuildingStatus.Working);
-    expect(waterEconomy(supplied).balance).toBe(-2);
+    expect(ColonySimulation.waterEconomy(supplied).balance).toBe(-2.7);
   });
 
   it('allows housing construction during famine, without food charges or population growth', () => {
@@ -925,8 +1442,8 @@ describe('GameSessionService and simulation', () => {
       service.openPlanet(planet);
       service.build(planet, BuildingType.Base, 0);
       const unfinished = service.colonies()[planet.id];
-      expect(waterEconomy(unfinished).production).toBe(0);
-      expect(foodEconomy(unfinished).production).toBe(0);
+      expect(ColonySimulation.waterEconomy(unfinished).production).toBe(0);
+      expect(ColonySimulation.foodEconomy(unfinished).production).toBe(0);
       vi.advanceTimersByTime(4000);
       const completed = service.colonies()[planet.id];
       expect(completed.stocks.water).toBe(140);
@@ -934,15 +1451,15 @@ describe('GameSessionService and simulation', () => {
       vi.advanceTimersByTime(3600000);
       const colony = service.colonies()[planet.id];
       expect(colony.stocks).toEqual(completed.stocks);
-      expect(waterEconomy(colony)).toEqual({
+      expect(ColonySimulation.waterEconomy(colony)).toEqual({
         production: 0.5,
         consumption: 0.5,
         balance: 0,
         populationSupplied: true,
       });
-      expect(foodEconomy(colony)).toEqual({ production: 1, consumption: 1, balance: 0 });
+      expect(ColonySimulation.foodEconomy(colony)).toEqual({ production: 1, consumption: 1, balance: 0 });
       const empty = { ...colony, stocks: { ...colony.stocks, water: 0, food: 0 } };
-      const next = advanceColony(empty, service.clock());
+      const next = ColonySimulation.advanceColony(empty, service.clock());
       expect(next.stocks.population).toBe(5);
       expect(next.stocks.water).toBe(0);
       expect(next.stocks.food).toBe(0);
@@ -1004,7 +1521,7 @@ describe('GameSessionService and simulation', () => {
     const mineId = snapshot.buildings[3].id;
     delayCallbacks(2000);
     expect(service.demolish(planet, mineId)).toBeNull();
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(snapshot.stocks.minerals + 11);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(snapshot.stocks.minerals);
     const minerals = service.colonies()[planet.id].stocks.minerals;
     vi.advanceTimersByTime(2000);
     expect(service.colonies()[planet.id].stocks.minerals).toBe(minerals);
@@ -1024,7 +1541,7 @@ describe('GameSessionService and simulation', () => {
       BuildingType.Farm,
     );
     const stocks = { ...initial.stocks, energy: 0, population: 10, water: 0, food: 0 };
-    BUILDINGS_BY_TYPE[BuildingType.Housing].demolish(stocks, true);
+    BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Housing].demolish(stocks, true);
     expect(stocks.populationCapacity).toBe(5);
     expect(stocks.population).toBe(10);
     let colony: Colony = {
@@ -1033,16 +1550,16 @@ describe('GameSessionService and simulation', () => {
       buildings: initial.buildings.filter((b) => b.type !== BuildingType.Housing),
     };
     for (let step = 1; step <= 5; step++) {
-      colony = advanceColony(colony, step * 2000);
+      colony = ColonySimulation.advanceColony(colony, step * 2000);
       expect(colony.stocks.population).toBe(10 - step);
     }
-    expect(advanceColony(colony, 12000).stocks.population).toBe(5);
+    expect(ColonySimulation.advanceColony(colony, 12000).stocks.population).toBe(5);
     const hungry = {
       ...colony,
       stocks: { ...colony.stocks, population: 10, food: 0, water: 0 },
       buildings: colony.buildings.filter((b) => b.type !== BuildingType.Farm),
     };
-    expect(advanceColony(hungry, 14000).stocks.population).toBe(9);
+    expect(ColonySimulation.advanceColony(hungry, 14000).stocks.population).toBe(9);
   });
 
   it('creates a JSON save with source data, unfinished construction, and a partial production step', () => {
@@ -1058,11 +1575,13 @@ describe('GameSessionService and simulation', () => {
     const save = service.createSave(new Date('2030-01-02T03:04:05.000Z'));
 
     expect(save).toEqual({
-      version: 1,
+      version: 3,
       savedAt: '2030-01-02T03:04:05.000Z',
       gameTime: 11000,
       lastProductionTick: 10000,
-      credits: 1680,
+      credits: 1683,
+      creditRemainder: 0,
+      maintenanceShortfall: 0,
       planets: knownPlanets,
       colonies: [
         {
@@ -1078,6 +1597,7 @@ describe('GameSessionService and simulation', () => {
               completesAt: 4000,
               completed: true,
               enabled: true,
+              disabledByFinance: false,
             },
             {
               id: 2,
@@ -1087,6 +1607,7 @@ describe('GameSessionService and simulation', () => {
               completesAt: 11000,
               completed: false,
               enabled: true,
+              disabledByFinance: false,
             },
           ],
         },
@@ -1199,7 +1720,7 @@ describe('GameSessionService and simulation', () => {
       vi.advanceTimersByTime(1);
       service.tick();
       expect(service.colonies()[planet.id].stocks.minerals).toBe(
-        restored.stocks.minerals + (savedTime >= 12000 ? 11 : 0),
+        restored.stocks.minerals + (savedTime >= 12000 ? 9.2 : 0),
       );
       vi.advanceTimersByTime(5000);
       expect(service.createSave(date)).toEqual(expected);
@@ -1241,10 +1762,10 @@ describe('GameSessionService and simulation', () => {
     const colony = service.colonies()[planet.id];
     const next = colony.buildings[2];
     expect(next.completesAt - next.startedAt).toBe(
-      BUILDINGS_BY_TYPE[BuildingType.Minerals].buildTime * 1000,
+      BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Minerals].buildTime * 1000,
     );
     vi.advanceTimersByTime(2000);
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(colony.stocks.minerals + 11);
+    expect(service.colonies()[planet.id].stocks.minerals).toBe(colony.stocks.minerals + 9.2);
   });
 
   it('restores manual pause, refreshes visibility, and preserves an existing system stop', () => {
@@ -1296,9 +1817,10 @@ describe('GameSessionService and simulation', () => {
         tile: index,
         startedAt: type === BuildingType.Base ? 0 : 4000,
         completesAt:
-          (type === BuildingType.Base ? 0 : 4000) + BUILDINGS_BY_TYPE[type].buildTime * 1000,
+          (type === BuildingType.Base ? 0 : 4000) + BuildingCatalogue.BUILDINGS_BY_TYPE[type].buildTime * 1000,
         completed: true,
         enabled: type !== BuildingType.Gas,
+        disabledByFinance: false,
       }));
       const save: GameSave = {
         ...original,
@@ -1320,6 +1842,7 @@ describe('GameSessionService and simulation', () => {
                 completesAt: 14000,
                 completed: false,
                 enabled: true,
+                disabledByFinance: false,
               },
             ],
           },
@@ -1329,16 +1852,19 @@ describe('GameSessionService and simulation', () => {
       const colony = service.colonies()[save.colonies[0].planetId];
       expect(colony.stocks.populationCapacity).toBe(25);
       expect(colony.stocks.population).toBe(population);
-      expect(colony.stocks.energy).toBe(1);
-      const workforce = colonyWorkforce(colony);
-      expect([...workforce.workers.values()]).toEqual([0, 2, 0, 2, 0, population === 5 ? 1 : 2, 0]);
+      expect(colony.stocks.energy).toBeCloseTo(population === 5 ? -5 / 3 : 1);
+      const workforce = ColonyWorkforce.colonyWorkforce(colony);
+      expect([...workforce.workers.values()]).toEqual([
+        0, population === 5 ? 5 : 6, 0, population === 5 ? 0 : 6, 0,
+        population === 5 ? 0 : 6, 0,
+      ]);
       expect(colony.buildings.map((building) => building.status)).toEqual([
         BuildingStatus.Working,
         BuildingStatus.Working,
         BuildingStatus.Working,
-        BuildingStatus.Depleted,
+        population === 5 ? BuildingStatus.NoWorkers : BuildingStatus.Depleted,
         BuildingStatus.Disabled,
-        BuildingStatus.NoWater,
+        population === 5 ? BuildingStatus.NoWorkers : BuildingStatus.NoWater,
         BuildingStatus.Construction,
       ]);
       expect(service.createSave(date)).toEqual(save);
@@ -1404,7 +1930,7 @@ describe('GameSessionService and simulation', () => {
         kind === 'JSON'
           ? '{"version":'
           : kind === 'version'
-            ? { ...saved, version: 2 }
+            ? { ...saved, version: 4 }
             : { ...saved, nextBuildingId: 1 };
       expect(() => service.restoreSave(input)).toThrow('Сохранение');
       expect(tick).not.toHaveBeenCalled();
@@ -1476,7 +2002,7 @@ describe('GameSessionService and simulation', () => {
     'handles the exact water boundary with $water stored water',
     ({ water, population, remaining }) => {
       const initial = completedColony(BuildingType.Base);
-      const result = advanceColony(
+      const result = ColonySimulation.advanceColony(
         {
           ...initial,
           stocks: { ...initial.stocks, water, population: 6 },
@@ -1490,7 +2016,7 @@ describe('GameSessionService and simulation', () => {
 
   it('loses at most one resident for simultaneous shortages and does not oscillate after dehydration', () => {
     const initial = completedColony(BuildingType.Base);
-    const starving = advanceColony(
+    const starving = ColonySimulation.advanceColony(
       {
         ...initial,
         stocks: { ...initial.stocks, water: 0, food: 0, population: 6, populationCapacity: 4 },
@@ -1503,12 +2029,12 @@ describe('GameSessionService and simulation', () => {
       stocks: { ...initial.stocks, water: 0, population: 6 },
     };
     for (let step = 0; step < 20; step++) {
-      colony = advanceColony(colony, step * 2000);
+      colony = ColonySimulation.advanceColony(colony, step * 2000);
       expect(colony.stocks.population).toBe(5);
       expect(colony.stocks.water).toBe(0);
     }
     expect(
-      advanceColony(
+      ColonySimulation.advanceColony(
         {
           ...colony,
           stocks: { ...colony.stocks, water: 1 },
@@ -1537,30 +2063,32 @@ describe('GameSessionService and simulation', () => {
       const building = before.buildings[1];
       const credits = service.credits();
       expect(service.toggleBuilding(planet, building.id)).toBeNull();
+      expect(service.credits()).toBe(credits);
       const disabled = service.colonies()[planet.id];
       expect(disabled.buildings[1].enabled).toBe(false);
       expect(disabled.buildings[1].status).toBe(BuildingStatus.Disabled);
       expect(disabled.stocks.energy).toBe(10);
-      expect(colonyWorkforce(disabled).employed).toBe(0);
+      expect(ColonyWorkforce.colonyWorkforce(disabled).employed).toBe(0);
       vi.advanceTimersByTime(4000);
       expect(service.colonies()[planet.id].stocks).toEqual(disabled.stocks);
       expect(service.colonies()[planet.id].deposits).toEqual(before.deposits);
       expect(service.colonies()[planet.id].buildings).toHaveLength(2);
-      expect(service.credits()).toBe(credits);
+      expect(service.credits()).toBe(credits + 2);
       expect(service.toggleBuilding(planet, building.id)).toBeNull();
       expect(service.colonies()[planet.id].buildings[1].enabled).toBe(true);
       const definition = service.definition(type);
-      expect(colonyWorkforce(service.colonies()[planet.id]).employed).toBe(
-        definition.workersRequired,
+      expect(ColonyWorkforce.colonyWorkforce(service.colonies()[planet.id]).employed).toBe(
+        Math.min(5, definition.workersRequired),
       );
       vi.advanceTimersByTime(2000);
       const active = service.colonies()[planet.id];
       if (definition.production) {
         expect(active.stocks[definition.production]).toBe(
-          disabled.stocks[definition.production] + definition.yieldFor(planet),
+          Math.round((disabled.stocks[definition.production] +
+            definition.yieldFor(planet) * Math.min(1, 5 / definition.workersRequired)) * 10) / 10,
         );
       } else {
-        expect(active.stocks.energy).toBe(26);
+        expect(active.stocks.energy).toBeCloseTo(10 + 16 * 5 / 6);
       }
       expect(before.buildings[1].enabled).toBe(true);
       expect(Object.isFrozen(disabled.buildings[1])).toBe(true);
@@ -1602,7 +2130,7 @@ describe('GameSessionService and simulation', () => {
     const before = service.colonies()[planet.id];
     delayCallbacks(6000);
     expect(service.toggleBuilding(planet, before.buildings[1].id)).toBeNull();
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(before.stocks.minerals + 33);
+    expect(service.colonies()[planet.id].stocks.minerals).toBeCloseTo(before.stocks.minerals + 27.6);
     const stopped = service.colonies()[planet.id];
     vi.advanceTimersByTime(4000);
     expect(service.colonies()[planet.id].stocks.minerals).toBe(stopped.stocks.minerals);
@@ -1610,7 +2138,7 @@ describe('GameSessionService and simulation', () => {
     expect(service.toggleBuilding(planet, before.buildings[1].id)).toBeNull();
     expect(service.colonies()[planet.id].stocks.minerals).toBe(stopped.stocks.minerals);
     vi.advanceTimersByTime(2000);
-    expect(service.colonies()[planet.id].stocks.minerals).toBe(stopped.stocks.minerals + 11);
+    expect(service.colonies()[planet.id].stocks.minerals).toBeCloseTo(stopped.stocks.minerals + 9.2);
   });
 
   it('reassigns released workers immediately and restores original priority when switched back on', () => {
@@ -1623,19 +2151,26 @@ describe('GameSessionService and simulation', () => {
     service.build(planet, BuildingType.Minerals, 2);
     service.build(planet, BuildingType.Gas, 3);
     vi.advanceTimersByTime(6000);
+    const save = service.createSave(new Date());
+    service.restoreSave({
+      ...save,
+      colonies: save.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 15 },
+      })),
+    });
     const before = service.colonies()[planet.id];
     const mine = before.buildings[2];
     const gas = before.buildings[3];
-    expect(allocateWorkers(before).get(gas.id)).toBe(1);
+    expect(ColonyWorkforce.allocateWorkers(before).get(gas.id)).toBe(3);
     expect(service.toggleBuilding(planet, mine.id)).toBeNull();
-    const released = colonyWorkforce(service.colonies()[planet.id]);
-    expect(released.workers.get(gas.id)).toBe(2);
-    expect(released.employed).toBe(4);
+    const released = ColonyWorkforce.colonyWorkforce(service.colonies()[planet.id]);
+    expect(released.workers.get(gas.id)).toBe(6);
+    expect(released.employed).toBe(12);
     expect(service.toggleBuilding(planet, mine.id)).toBeNull();
-    const resumed = colonyWorkforce(service.colonies()[planet.id]);
-    expect(resumed.workers.get(mine.id)).toBe(2);
-    expect(resumed.workers.get(gas.id)).toBe(1);
-    expect(resumed.employed).toBe(5);
+    const resumed = ColonyWorkforce.colonyWorkforce(service.colonies()[planet.id]);
+    expect(resumed.workers.get(mine.id)).toBe(6);
+    expect(resumed.workers.get(gas.id)).toBe(3);
+    expect(resumed.employed).toBe(15);
   });
 
   it('sheds newer consumers when a power station is disabled and restarts them when enabled', () => {
@@ -1655,8 +2190,8 @@ describe('GameSessionService and simulation', () => {
     expect(disabled.buildings[3].status).toBe(BuildingStatus.NoEnergy);
     expect(disabled.stocks.populationCapacity).toBe(25);
     expect(service.toggleBuilding(planet, station.id)).toBeNull();
-    expect(service.colonies()[planet.id].stocks.energy).toBe(11);
-    expect(service.colonies()[planet.id].buildings[3].status).toBe(BuildingStatus.Working);
+    expect(service.colonies()[planet.id].stocks.energy).toBeCloseTo(10 + 16 * 5 / 6 - 15);
+    expect(service.colonies()[planet.id].buildings[3].status).toBe(BuildingStatus.NoWorkers);
   });
 
   it('allocates whole workers by placement id, skipping construction, bases, and housing', () => {
@@ -1670,64 +2205,86 @@ describe('GameSessionService and simulation', () => {
     );
     const site = { ...colony.buildings[1], id: -1, completed: false };
     const buildings = [...colony.buildings, site];
-    const forward = allocateWorkers({ ...colony, buildings });
-    const reversed = allocateWorkers({ ...colony, buildings: [...buildings].reverse() });
+    const forward = ColonyWorkforce.allocateWorkers({ ...colony, buildings });
+    const reversed = ColonyWorkforce.allocateWorkers({ ...colony, buildings: [...buildings].reverse() });
     expect([...forward]).toEqual([...reversed]);
-    expect([...forward.values()]).toEqual([0, 0, 2, 2, 1, 0, 0]);
-    expect(colonyWorkforce({ ...colony, buildings }).employed).toBe(5);
+    expect([...forward.values()]).toEqual([0, 0, 5, 0, 0, 0, 0]);
+    expect(ColonyWorkforce.colonyWorkforce({ ...colony, buildings }).employed).toBe(5);
     expect(
-      colonyWorkforce({
+      ColonyWorkforce.colonyWorkforce({
         ...colony,
         stocks: { ...colony.stocks, population: 20 },
       }).employed,
-    ).toBe(7);
+    ).toBe(20);
   });
 
   it('scales extraction by staffing before capping deposits and releases workers on demolition', () => {
     const colony = completedColony(BuildingType.Base, BuildingType.Minerals, BuildingType.Gas);
     colony.stocks.population = 1;
     colony.stocks.populationCapacity = 1;
-    const partial = advanceColony(colony, 0);
-    expect(partial.stocks.minerals).toBe(colony.stocks.minerals + 5.5);
-    expect(partial.deposits.minerals).toBe(colony.deposits.minerals - 5.5);
+    const partial = ColonySimulation.advanceColony(colony, 0);
+    expect(partial.stocks.minerals).toBe(colony.stocks.minerals + 1.8);
+    expect(partial.deposits.minerals).toBe(colony.deposits.minerals - 1.8);
     expect(partial.stocks.gas).toBe(colony.stocks.gas);
     expect(partial.buildings[2].status).toBe(BuildingStatus.NoWorkers);
     expect(partial.stocks.water).toBe(159.4);
-    const final = advanceColony({ ...colony, deposits: { minerals: 3, gas: 10 } }, 0);
-    expect(final.stocks.minerals).toBe(colony.stocks.minerals + 3);
+    const final = ColonySimulation.advanceColony({ ...colony, deposits: { minerals: 1, gas: 10 } }, 0);
+    expect(final.stocks.minerals).toBe(colony.stocks.minerals + 1);
     expect(final.deposits.minerals).toBe(0);
-    const demolished = advanceColony(
+    const demolished = ColonySimulation.advanceColony(
       {
         ...colony,
         buildings: colony.buildings.filter((building) => building.id !== 1),
       },
       0,
     );
-    expect(demolished.stocks.gas).toBe(colony.stocks.gas + 2.5);
+    expect(demolished.stocks.gas).toBe(colony.stocks.gas + 0.8);
     expect(colony.stocks.minerals).toBe(240);
+  });
+
+  it('employs 45 residents across colony facilities and scales a short-staffed mine without blocking construction', () => {
+    const colony = completedColony(
+      BuildingType.Base, BuildingType.Housing, BuildingType.Housing,
+      BuildingType.Power, BuildingType.Power, BuildingType.Power,
+      BuildingType.Water, BuildingType.Farm, BuildingType.Farm,
+      BuildingType.Minerals, BuildingType.Gas,
+    );
+    colony.stocks.population = 45;
+    colony.stocks.populationCapacity = 45;
+    const gas = colony.buildings[10];
+    const full = ColonyWorkforce.colonyWorkforce(colony);
+    expect(full.employed).toBe(45);
+    expect(colony.buildings.every((building) => full.efficiency(building) === 1)).toBe(true);
+    const short = { ...colony, stocks: { ...colony.stocks, population: 42 } };
+    const partial = ColonyWorkforce.colonyWorkforce(short);
+    expect(partial.employed).toBe(42);
+    expect(partial.workers.get(gas.id)).toBe(3);
+    expect(partial.efficiency(gas)).toBe(0.5);
+    expect(ColonySimulation.advanceColony(short, 0).stocks.gas).toBe(colony.stocks.gas + 2.5);
+    expect(BuildingRules.buildProblem(short, 2000, BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Gas])).toBeNull();
   });
 
   it('projects partial farm output consistently and keeps base supplies independent of workers', () => {
     const colony = completedColony(BuildingType.Base, BuildingType.Farm);
     colony.stocks.population = 1;
     colony.stocks.populationCapacity = 1;
-    expect(foodEconomy(colony)).toEqual({ production: 3, consumption: 0.2, balance: 2.8 });
-    expect(waterEconomy(colony).balance).toBe(-0.6);
-    expect(advanceColony(colony, 0).stocks.food).toBe(102.8);
+    expect(ColonySimulation.foodEconomy(colony)).toEqual({ production: 1.7, consumption: 0.2, balance: 1.5 });
+    expect(ColonySimulation.waterEconomy(colony).balance).toBe(-0.6);
+    expect(ColonySimulation.advanceColony(colony, 0).stocks.food).toBe(101.5);
     const empty = { ...colony, stocks: { ...colony.stocks, population: 0, populationCapacity: 0 } };
-    const result = advanceColony(empty, 0);
+    const result = ColonySimulation.advanceColony(empty, 0);
     expect(result.stocks.food).toBe(101);
     expect(result.stocks.water).toBe(160.5);
     expect(result.buildings[1].status).toBe(BuildingStatus.NoWorkers);
     expect(
-      advanceColony(
+      ColonySimulation.advanceColony(
         {
           ...result,
           stocks: { ...result.stocks, population: 1, populationCapacity: 1 },
         },
         2000,
       ).stocks.food,
-    ).toBe(103.8);
+    ).toBe(102.5);
   });
 
   it('scales power with staffing, sheds newest consumers, and restores them automatically', () => {
@@ -1739,34 +2296,34 @@ describe('GameSessionService and simulation', () => {
       BuildingType.Water,
       BuildingType.Power,
     );
-    colony.stocks.population = 8;
-    colony.stocks.populationCapacity = 8;
-    const result = advanceColony(colony, 0);
+    colony.stocks.population = 24;
+    colony.stocks.populationCapacity = 24;
+    const result = ColonySimulation.advanceColony(colony, 0);
     expect(result.stocks.energy).toBe(-2);
     expect(result.buildings[4].status).toBe(BuildingStatus.NoEnergy);
-    expect(result.stocks.water).toBe(156.7);
+    expect(result.stocks.water).toBe(155.1);
     expect(result.stocks.minerals).toBe(251);
     expect(result.stocks.gas).toBe(125);
-    expect(waterEconomy(colony).production).toBe(0.5);
-    expect(foodEconomy(colony).production).toBe(5);
-    const reverse = advanceColony({ ...colony, buildings: [...colony.buildings].reverse() }, 0);
+    expect(ColonySimulation.waterEconomy(colony).production).toBe(0.5);
+    expect(ColonySimulation.foodEconomy(colony).production).toBe(5);
+    const reverse = ColonySimulation.advanceColony({ ...colony, buildings: [...colony.buildings].reverse() }, 0);
     expect(reverse.stocks).toEqual(result.stocks);
     expect(reverse.buildings.map((building) => building.status).reverse()).toEqual(
       result.buildings.map((building) => building.status),
     );
-    const lower = advanceColony(
+    const lower = ColonySimulation.advanceColony(
       {
         ...result,
-        stocks: { ...result.stocks, population: 7, populationCapacity: 7 },
+        stocks: { ...result.stocks, population: 21, populationCapacity: 21 },
       },
       2000,
     );
     expect(lower.stocks.energy).toBe(-10);
     expect(lower.buildings[3].status).toBe(BuildingStatus.NoEnergy);
-    const restored = advanceColony(
+    const restored = ColonySimulation.advanceColony(
       {
         ...lower,
-        stocks: { ...lower.stocks, population: 9, populationCapacity: 9 },
+        stocks: { ...lower.stocks, population: 27, populationCapacity: 27 },
       },
       4000,
     );
@@ -1774,9 +2331,9 @@ describe('GameSessionService and simulation', () => {
     expect(restored.buildings.every((building) => building.status === BuildingStatus.Working)).toBe(
       true,
     );
-    expect(restored.stocks.water).toBe(lower.stocks.water + 8.6);
-    expect(buildProblem(result, 2000, BUILDINGS_BY_TYPE[BuildingType.Water])).toBe('energy');
-    expect(buildProblem(result, 2000, BUILDINGS_BY_TYPE[BuildingType.Power])).toBeNull();
-    expect(demolitionProblem(result, result.buildings[5].id)).toBe(DemolitionError.Energy);
+    expect(restored.stocks.water).toBe(lower.stocks.water + 6.8);
+    expect(BuildingRules.buildProblem(result, 2000, BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Water])).toBe('energy');
+    expect(BuildingRules.buildProblem(result, 2000, BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Power])).toBeNull();
+    expect(DemolitionRules.demolitionProblem(result, result.buildings[5].id)).toBe(DemolitionError.Energy);
   });
 });

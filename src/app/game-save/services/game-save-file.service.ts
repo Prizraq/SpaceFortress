@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, inject, Injectable } from '@angular/core';
-import { readGameSave } from '../domain/game-save-validation';
+import * as GameSaveValidation from '../domain/game-save-validation';
 import { GameSave } from '../models/interface/game-save';
 
 @Injectable({ providedIn: 'root' })
@@ -15,7 +15,7 @@ export class GameSaveFileService {
   }
 
   exportSave(input: GameSave): void {
-    const saved = readGameSave(input);
+    const saved = GameSaveValidation.readGameSave(input);
     const timestamp = saved.savedAt.replace(/[:.]/g, '-');
     this.download(
       JSON.stringify(saved, null, 2),

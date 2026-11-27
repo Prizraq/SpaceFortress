@@ -1,0 +1,99 @@
+:host {
+  display: block;
+  font:
+    12px 'Bahnschrift',
+    'Trebuchet MS',
+    sans-serif;
+  color: #dce8e5;
+}
+:host(.orbital-finances) {
+  position: absolute;
+  z-index: 2;
+  left: 32px;
+  bottom: 70px;
+  width: min(440px, calc(100% - 64px));
+  max-height: 35%;
+  overflow-y: auto;
+}
+:host(.collapsed) {
+  width: fit-content;
+}
+section {
+  position: relative;
+  padding: 12px 20px;
+  border: 1px solid #8bc6bf24;
+  background: #101f21b3;
+  backdrop-filter: blur(4px);
+}
+section.collapsed {
+  padding: 0;
+}
+.toggle-button {
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: #a7c7c9;
+  font: inherit;
+  cursor: pointer;
+}
+.toggle-button:hover {
+  color: #fff;
+  background: #79e7ec12;
+}
+.toggle-button:focus-visible {
+  outline: 2px solid #efcc81;
+  outline-offset: -3px;
+}
+.close-button {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 26px;
+}
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding-right: 24px;
+}
+strong {
+  color: #e8c988;
+  font-weight: 400;
+}
+p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.deficit,
+.deficit strong {
+  color: #ef9b91;
+}
+details {
+  margin-top: 8px;
+  color: #8baba6;
+}
+summary {
+  cursor: pointer;
+}
+summary:focus-visible {
+  outline: 2px solid #efcc81;
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  :host(.orbital-finances.with-panel) {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  :host(.orbital-finances) {
+    left: 16px;
+    width: calc(100% - 32px);
+    max-height: 22%;
+  }
+  :host(.orbital-finances.collapsed) {
+    width: fit-content;
+  }
+}

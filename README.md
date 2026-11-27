@@ -12,6 +12,8 @@ Application code is grouped by feature under `src/app/`:
   Pure game rules live in its additional `domain/` folder.
 - `game-session/` owns `GameSessionService`: the single session state, shared credits,
   planets, colonies, game clock, pause reasons, commands, and snapshot creation/restoration.
+  Its `domain/` contains the pure fixed-point credit ledger; `components/` contains
+  the financial summary reused on the orbit and surface.
 - `game-save/` owns the snapshot schema, validation, storage/file adapters, autosaving,
   and startup/session-menu components.
 - `shared/` contains the `Planet` and `PlanetResourses` interfaces, `PlanetService`,
@@ -24,6 +26,14 @@ Tests stay alongside the code they cover. The solar-system screen composes the p
 surface component; colony code does not depend on solar-system internals.
 Pure colony rules do not depend on session management or save formats.
 Both game screens use the same session service; storage and file access stay in `game-save/`.
+
+Domain helpers remain pure module exports, without Angular services or shared mutable state.
+Consumers, tests, and other domain modules use PascalCase namespace imports so calls identify
+their responsibility, for example `import * as ColonyFinance from '../../planet/domain/colony-finances'`
+and `ColonyFinance.colonyFinances(colony)`. The module names are `BuildingCatalogue`, `BuildingRules`,
+`ColonyFinance`, `ColonySimulation`, `ColonyWorkforce`, `DemolitionRules`, `CreditLedger`,
+`SessionMaintenance`, and `GameSaveValidation`. Calls within the defining module stay local;
+model types and Angular services retain their ordinary named imports.
 
 ## Solar system data
 
@@ -65,11 +75,23 @@ A shallow curved horizon has a black background above it. Brighter grid lines ha
 to remain visible against ice as well as dark terrain.
 A short click still selects or builds on a hexagon; panning does neither.
 Keyboard focus brings off-screen hexagons into view. Changing planets resets the view.
-The catalogue and inspector retain their independent scrolling.
+The colony fills the viewport without page-level scrolling; the catalogue, information tab content,
+and narrow-screen resource bar scroll independently. On wide screens, drag the two separators to
+resize the side panels (200-480 px, each limited to 35% of the workspace so the map remains usable).
+Focused separators also support Left/Right arrows and Home/End. On screens up to 900 px wide,
+both panels sit below the map instead of extending the page.
+The right panel has Planet, Building, and Finances tabs. Planet is the initial view and includes
+physical telemetry, resource abundance, and a live colony summary. Selecting a tile or placing
+a building opens Building; switching tabs preserves the selection. Finances contains the existing
+shared budget and the current colony's contribution instead of taking up a full-width screen row.
+Tabs support arrow keys and Home/End. Panel widths and the selected tab are view state, not save data.
 The hexagons share one continuous procedural surface texture, seeded by the planet's stable id.
 The same terrain extends beyond the hexagons on a backdrop with straight sides and a curved top;
 this surrounding area is decorative and does not add buildable tiles.
-Layered terrain noise, slope lighting, coastlines, and craters replace independent tile colours.
+Layered terrain noise, slope lighting, small lakes, and craters replace independent tile colours.
+Water appears only in isolated ponds, each smaller than one hex in both area and extent.
+Their scale follows the actual hex size and canvas resolution, and separated lake centres prevent
+ponds from merging into oceans. Low-lying areas outside the ponds remain dry land.
 Dry airless worlds use rust and rock; temperate worlds use vegetation and water; distant wet worlds
 use cold rock and ice. These are illustrative biomes, not scientific climate or water-coverage models.
 The texture is generated with Canvas on planet changes (up to 1200 pixels on its longest side),
@@ -83,6 +105,140 @@ State survives screen changes and can be saved locally or transferred through JS
 Reloading opens the startup screen, where a compatible save can be continued.
 The autosave notification disappears after four seconds; a new autosave restarts that timeout.
 Save notifications use a translucent background, while errors and confirmation prompts remain unchanged.
+
+### Credits and maintenance
+
+All colonies share one budget; mineral, water, food and gas stockpiles remain local.
+Every actual resident pays the ordinary tax of 6 credits per game minute, including
+residents without assigned work. Adjustable High / Middle / Low rates and population
+satisfaction are reserved for stage 3, not implemented here.
+
+Only mineral and gas mines require maintenance: 15 credits per game minute each.
+Bases, housing, water stations, farms and power stations are free to maintain.
+Construction sites and disabled mines incur no maintenance. Completed enabled mines
+pay the full rate even when waiting for workers, water, power or depleted deposits.
+The rates live in the existing building definitions as `maintenancePerMinute`.
+Construction still charges its existing price once on placement; demolition refunds nothing.
+
+Taxes use the population at the beginning of each existing 2-second game step,
+before population changes and building completion. New residents and completed bases
+start paying on the following step. Delayed callbacks
+replay each step separately. Manual pause, hidden tabs, system stops and closed games
+never accrue finances; loading applies no offline income.
+
+`colonyFinances` and `sessionFinances` in `planet/domain/colony-finances.ts` are
+the shared pure source for simulation and consumers. A colony result contains
+`income` (credits per game minute), `incomeCentsPerStep` (exact hundredths per
+production step), `buildings` (building id, type and projected maintenance),
+`maintenance` (total projected expenses per game minute), and `balance` (income
+minus projected expenses). The session result includes these totals and independent
+colony contributions with planet ids and names. Calculations do not mutate inputs
+or return references to building state.
+
+`maintenanceCentsPerStep` is also returned for every building, colony and session.
+Each step calculates taxes and maintenance from its starting state. Taxes of that
+step are available immediately in the shared budget. If funds are insufficient,
+the newest paid mines (descending global building id, independent of colony order)
+are disabled until all remaining maintenance can be paid in full. Workers and
+energy are recalculated, money is settled once, then production runs. A mine disabled
+on that step neither pays nor produces; credits never become negative and no debt
+or free unpaid production is created. Financially disabled mines stay off until a
+manual toggle, which may trigger another shutdown on the next step.
+Commands settle elapsed steps before changing a building, without retroactive charges.
+The existing financial summary shows shared credits, tax income, maintenance and
+regular balance per game minute. Colony information shows income, expenses and
+its contribution to the shared budget. These are current-condition forecasts,
+not historical income; one-time construction prices are separate.
+On both screens its background is translucent while the text remains opaque.
+The close button collapses it to a compact “Финансы” button; reopening shows the
+current figures. Closing the summary does not pause the game or suppress financial
+notifications, and its visibility is not saved with the session.
+The catalogue and inspector show the one-time price, upkeep rate and whether
+maintenance is currently required, including idle enabled mines and financial shutdowns.
+
+A negative shared balance shows an approximate depletion time in game minutes/seconds,
+including fractional credits, assuming unchanged population and paid buildings.
+Zero or positive balance has no depletion forecast; paused time never reduces it.
+Financially disabled buildings remain visible even after the deficit is gone.
+One notification component serves both orbital and surface views: deficit onset,
+new financial shutdowns and recovery are announced only on state transitions.
+Notifications can be dismissed or expire after four real seconds, without being
+repeated or extended every production step. Recovery distinguishes an eliminated
+deficit from buildings that still require manual reactivation. Starting a new game
+clears notifications. No history charts, assistant screen, loans or emergency grants are added.
+
+Snapshots now use v3: `credits` holds whole credits, `creditRemainder` holds 0–99
+hundredths. `maintenanceShortfall` is retained for compatibility with earlier v2
+snapshots, but successful financial steps reset it to zero. Arithmetic retains exact
+cents without multiplying the entire balance by 100; per-resident tax cents are
+calculated before multiplying by population. Settlement uses the net change in
+cents, so temporary tax income cannot overflow an otherwise representable final
+balance before maintenance is deducted. Genuine overflow is explicitly rejected.
+Credit displays format whole credits and the remainder separately, preserving
+hundredths even at the largest supported whole-credit balance.
+Monetary units and the v3 schema are unchanged.
+Each saved building now requires a boolean
+`disabledByFinance`; true is valid only for a completed disabled unprotected building.
+This is a persistent reason, not a forecast derived from available credits.
+Valid v1 snapshots migrate with zero remainder and shortfall;
+v2 preserves both fields. Both old versions gain `disabledByFinance: false`.
+historical deadlines, saved game time and the production-step remainder are unchanged.
+Future unsupported versions and invalid monetary fields are explicitly rejected.
+Compatibility tests cover unchanged v1 purchasing power, v2 cents saved both on
+and between production boundaries, repeated loading after a stopped interval,
+continuation matching uninterrupted play, reset of nonzero financial fields,
+and export/import through a real JSON Blob and FileReader. Importing v1 writes
+the migrated v3 snapshot to local storage. Derived financial forecasts are
+discarded on input and never serialized.
+
+For v2 and v3, `credits` and historical
+`maintenanceShortfall` must be nonnegative safe integers; `creditRemainder`
+must be an integer from 0 through 99. Unsupported versions and corrupted values
+fail before state replacement or file download. Loading restores source values
+without running a tax step; only new active production boundaries accrue income.
+New games reset credits to 2000, both auxiliary monetary fields to zero, and
+clear colonies and processed game time. See the financial format contract in
+[the development plan](DEVELOPMENT_PLAN.md#12-добавить-локальные-сохранения).
+Native file dialogs and a cross-browser matrix were not tested by this unit suite.
+
+### Stage 2 verification
+
+The final related run passed 371 tests in 14 files, the production build and the
+test-project TypeScript check. A 24-game-hour regression compares 43,200 ordinary
+steps with one delayed callback across two colonies: income 60/min, idle mine
+maintenance 45/min, and starting funds 10.73 produce exactly 21610.73 credits,
+preserving the partial-step phase. Existing tests also cover population changes,
+pauses, shutdown ordering, construction/demolition, v1/v2/v3 migration,
+save/load/continuation, export/import, new games and notification deduplication.
+
+Browser verification built Terra's base, power, water, farm, housing and mine
+through the actual controls, reaching 25 residents and +135/min. Twelve mines
+cost 180/min against 150/min taxes. At zero credits the two newest mines shut
+down; manually disabling one more restored +15/min and accumulated 100 credits
+in 400 game seconds. The displayed forecasts, shutdown reason, pause and recovery
+notifications matched the session. Game time was accelerated through the existing
+clock and production steps, not through replacement colony fixtures.
+The temporary server and browser save were removed after verification.
+
+Stage 2 is **not declared fully complete**: the documented mineral-exhaustion
+and water/gas bootstrap dead ends still have no recovery mechanism, as assistance
+was explicitly deferred. Native file dialogs, actual OS sleep and a cross-browser
+matrix remain unverified. Existing build warnings remain for bundle/style budgets
+and Pixi's CommonJS dependency; jsdom also reports its unavailable canvas context.
+
+### Construction, production and population
+
+Recovery and balance measurements keep the ordinary tax at 6 credits per resident
+per game minute and mine maintenance at 15; necessary support buildings remain free.
+A completed base restores five residents even from zero population and empty stocks
+in ten game seconds, with taxes resuming on the following steps. Spending all credits
+is recoverable by taxes and disabling surplus mines, but this does not create local
+minerals or gas. Cancelling first mines until minerals are exhausted, or exhausting
+water and gas without a water station, can block further production despite a growing
+credit budget. These reproducible resource dead ends and a proposed, unapproved
+one-time paid recovery kit are documented in [the development plan](DEVELOPMENT_PLAN.md).
+The confirmed decision is to defer assistance to a separate task: no recovery grant,
+new persistent field or save version has been introduced.
 
 Build one main base per planet before placing other buildings. Select a building in the catalogue
 and a free hexagon, select a free hexagon and press its catalogue build button, or drag a catalogue
@@ -143,13 +299,14 @@ red for a negative balance, yellow for 0 through +0.2, green above +0.2.
 An empty food stockpile also displays "Голод!", including at exact production/consumption balance.
 
 Completed buildings receive whole workers automatically in placement-id order. Main bases and housing
-need no workers; water stations need 1, and mines, farms, and power stations need 2 each.
+need no workers; water stations need 3, and mines, farms, and power stations need 6 each.
 Construction sites receive none. The allocation is derived by `allocateWorkers` in
 `colony-workforce.ts`, separately from production, so a future management screen can replace the policy.
 Workers remain assigned while their building waits for water, power, or deposits; disabling or demolition releases
 them immediately. The population indicator shows total assigned workers, and the inspector shows
 assigned/required workers, effective output, and efficiency. The catalogue lists staffing requirements.
-Production and solar capacity scale by assigned/required workers: one of two workers gives 50% output.
+Production and solar capacity scale by assigned/required workers: three of six workers give 50% output.
+Insufficient population does not block construction; a building receives the remaining available workers.
 Empty buildings produce nothing and consume no operating water; partially staffed producers still
 need their full operating water per productive cycle. Base supplies and housing capacity are unaffected.
 Allocation for production uses population at the start of the cycle; new residents work next cycle.
@@ -189,7 +346,7 @@ State-changing operations explicitly call `recalculateColonyWorkforce` before fr
 Free energy is derived from staffing, enabled buildings, and construction reservations in one place,
 not incremented/decremented by construction or building effects.
 
-Version 1 saves preserve `startedAt` and `completesAt` as authoritative construction deadlines.
+Version 1 and 2 saves preserve `startedAt` and `completesAt` as authoritative construction deadlines.
 Validation requires a positive duration and consistency with processed production ticks, not equality
 with the current catalogue. Balance changes therefore affect new construction without rescheduling
 existing buildings or rejecting saves with historical durations. Snapshot structure/semantic changes

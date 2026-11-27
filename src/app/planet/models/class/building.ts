@@ -16,6 +16,7 @@ export abstract class Building implements BuildingDefinition {
   readonly costWater: number = 0;
   readonly costGas: number = 0;
   readonly costEnergy: number = 0;
+  readonly maintenancePerMinute: number = 0;
   readonly energyGain: number = 0;
   readonly populationGain: number = 0;
   readonly populationCapacity: number = 0;

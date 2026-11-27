@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { Component, inject, output, signal } from '@angular/core';
-import { readGameSave } from '../../domain/game-save-validation';
+import * as GameSaveValidation from '../../domain/game-save-validation';
 import { GameSave } from '../../models/interface/game-save';
 import { GameSessionService } from '../../../game-session/services/game-session.service';
 import { GameSaveStorageService } from '../../services/game-save-storage.service';
@@ -34,7 +34,7 @@ export class GameStartComponent {
     try {
       const raw = this.storage.readRaw();
       this.rawSave.set(raw);
-      if (raw !== null) this.saved.set(readGameSave(raw));
+      if (raw !== null) this.saved.set(GameSaveValidation.readGameSave(raw));
     } catch (error) {
       this.showError(error);
     }

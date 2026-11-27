@@ -65,6 +65,28 @@ describe('SolarSystemComponent', () => {
     vi.useRealTimers();
   });
 
+  it('shows the shared budget and colony contributions without opening a surface', () => {
+    const [first, second] = component.planets;
+    component.game.openPlanet(first);
+    component.game.openPlanet(second);
+    component.game.build(first, BuildingType.Base, 0);
+    component.game.build(second, BuildingType.Base, 0);
+    vi.advanceTimersByTime(6000);
+    fixture.detectChanges();
+    const summary = fixture.nativeElement.querySelector('.orbital-finances');
+    expect(summary.querySelector('[data-financial-credits]').textContent.trim()).toBe('1602');
+    expect(summary.querySelector('[data-financial-balance]').textContent.trim()).toBe('+60');
+    expect(summary.querySelectorAll('[data-colony-finances]')).toHaveLength(2);
+    expect(component.surfacePlanet()).toBeNull();
+    component.selectPlanet(first);
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector('[data-panel-finances]');
+    expect([...panel.querySelectorAll('dd')].map((value) => value.textContent.trim())).toEqual(['30', '0', '+30']);
+    component.openPlanet(first);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('app-financial-warnings')).toHaveLength(1);
+  });
+
   it('pauses orbital motion with the game while keeping rendering independent', () => {
     const pause = fixture.nativeElement.querySelector('[data-pause-toggle]') as HTMLButtonElement;
     expect(renderer.setMotionPaused).toHaveBeenLastCalledWith(false);
@@ -337,9 +359,9 @@ describe('SolarSystemComponent', () => {
       expect(fixture.nativeElement.querySelector('.construction-progress')).toBeNull();
       vi.advanceTimersByTime(2000);
       fixture.detectChanges();
-      expect(game.colonies()[planet.id].stocks.minerals).toBe(minerals + 11);
+      expect(game.colonies()[planet.id].stocks.minerals).toBe(minerals + 9.2);
       expect(fixture.nativeElement.querySelector('[data-resource="minerals"]').textContent.trim())
-        .toBe(`${minerals + 11}`);
+        .toBe(reopened.resourceNumbers.format(minerals + 9.2));
     },
   );
 
@@ -391,7 +413,7 @@ describe('SolarSystemComponent', () => {
     expect(game.colonies()[planet.id].buildings[1].completed).toBe(true);
     expect(game.colonies()[planet.id].stocks.minerals).toBe(minerals);
     vi.advanceTimersByTime(2000);
-    expect(game.colonies()[planet.id].stocks.minerals).toBe(minerals + 11);
+    expect(game.colonies()[planet.id].stocks.minerals).toBe(minerals + 9.2);
   });
 
   it('drops the old surface and colony after a confirmed session reset', () => {

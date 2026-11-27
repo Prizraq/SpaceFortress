@@ -17,6 +17,7 @@
   </div>
   <app-game-save-controls />
 </div>
+<app-financial-warnings />
 @if (game.paused()) {
   <div class="signal-interference" aria-hidden="true"></div>
 }
@@ -40,6 +41,8 @@
   @if (selectedPlanet(); as planet) {
     <app-planet-panel class="planet-panel" [planet]="planet" (closed)="closePanel()" (opened)="openPlanet(planet)" />
   }
+
+  <app-financial-summary class="orbital-finances" [class.with-panel]="!!selectedPlanet()" />
 
   <footer class="map-footer">
     <span><i></i> ОРБИТАЛЬНАЯ ПРОЕКЦИЯ</span>

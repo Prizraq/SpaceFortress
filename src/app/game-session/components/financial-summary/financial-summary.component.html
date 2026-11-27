@@ -1,0 +1,93 @@
+<section aria-label="Финансы колоний" [class.collapsed]="!expanded()">
+  <button
+    class="toggle-button"
+    [class.close-button]="expanded()"
+    type="button"
+    [attr.aria-label]="expanded() ? 'Закрыть финансы колоний' : 'Открыть финансы колоний'"
+    [attr.aria-expanded]="expanded()"
+    (click)="expanded.set(!expanded())"
+  >
+    {{ expanded() ? '×' : 'Финансы' }}
+  </button>
+  @if (expanded()) {
+    <div class="totals" data-financial-summary>
+      <span
+        >Кредиты · общий счёт: <strong data-financial-credits>{{ creditText() }}</strong></span
+      >
+      <span
+        >Налоговый доход:
+        <strong data-financial-income>{{ numbers.format(game.finances().income) }}</strong> /
+        игровую мин</span
+      >
+      <span
+        >Содержание:
+        <strong data-financial-maintenance>{{
+          numbers.format(game.finances().maintenance)
+        }}</strong>
+        / игровую мин</span
+      >
+      <span [class.deficit]="game.finances().balance < 0">
+        Регулярный баланс:
+        <strong data-financial-balance
+          >{{ game.finances().balance > 0 ? '+' : ''
+          }}{{ numbers.format(game.finances().balance) }}</strong
+        >
+        / игровую мин
+      </span>
+    </div>
+    @if (localFinances(); as local) {
+      <p data-local-finances [class.deficit]="local.balance < 0">
+        {{ local.name }}: доход {{ numbers.format(local.income) }}, расходы
+        {{ numbers.format(local.maintenance) }}, вклад {{ local.balance > 0 ? '+' : ''
+        }}{{ numbers.format(local.balance) }} / игровую мин
+      </p>
+    }
+    <p>
+      Прогноз по текущему населению и включённым готовым зданиям, не доход за прошедшую минуту.
+      Разовая цена строительства в регулярный баланс не входит.
+    </p>
+    @if (depletionSeconds(); as seconds) {
+      <p class="deficit" data-financial-deficit>
+        Отрицательный регулярный баланс. До исчерпания кредитов приблизительно
+        {{ depletionTime(seconds) }} игрового времени.
+      </p>
+    } @else if (depletionSeconds() === 0) {
+      <p class="deficit" data-financial-deficit>
+        Отрицательный регулярный баланс. Кредиты исчерпаны.
+      </p>
+    }
+    @if (depletionSeconds() !== null) {
+      <p data-depletion-assumptions>
+        При неизменных населении и наборе оплачиваемых зданий; будущие действия не учтены. На паузе
+        срок не сокращается. Финансовые отключения изменят прогноз.
+      </p>
+    }
+    @if (financiallyDisabled().length) {
+      <details class="deficit" data-financial-shutdowns>
+        <summary>
+          Недостаточно кредитов: отключено зданий — {{ financiallyDisabled().length }}
+        </summary>
+        <p>
+          Содержание шахт списывается по игровым шагам. Новые шахты отключаются первыми; включение —
+          вручную, даже после пополнения бюджета.
+        </p>
+        @for (building of financiallyDisabled(); track building.id) {
+          <p>
+            {{ building.colonyName }} · {{ building.name }} #{{ building.id }}: отключено из-за
+            недостатка кредитов.
+          </p>
+        }
+      </details>
+    }
+    <details>
+      <summary>Вклад колоний · обычный налог {{ taxPerResident }} / жителя / игровую мин</summary>
+      @for (colony of game.colonyFinances(); track colony.planetId) {
+        <p [attr.data-colony-finances]="colony.planetId" [class.deficit]="colony.balance < 0">
+          {{ colony.name }}: доход {{ numbers.format(colony.income) }}, расходы
+          {{ numbers.format(colony.maintenance) }}, вклад {{ colony.balance > 0 ? '+' : ''
+          }}{{ numbers.format(colony.balance) }} / игровую мин
+        </p>
+      }
+    </details>
+  }
+</section>

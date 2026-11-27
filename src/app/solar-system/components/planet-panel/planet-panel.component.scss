@@ -42,6 +42,9 @@ dd small { color: var(--muted); }
 .open-surface { width: 100%; margin-bottom: 20px; min-height: 38px; border: 1px solid #79e7ec60; border-radius: 2px; background: #79e7ec12; color: var(--cyan); cursor: pointer; }
 .open-surface:hover { background: #79e7ec24; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.colony-finances { font-size: 11px; color: var(--muted); }
+.colony-finances .telemetry { margin: 12px 0; }
+.colony-finances .deficit, .colony-finances .deficit dt { color: #ef9b91; }
 @media (max-width: 700px) {
   .ui-panel { padding: 0 18px; }
   .planet-heading { padding: 12px 0; }

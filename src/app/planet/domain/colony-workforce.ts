@@ -1,7 +1,7 @@
 import { BuildingStatus } from '../models/enum/building-status';
 import { Colony } from '../models/interface/colony';
 import { PlacedBuilding } from '../models/interface/placed-building';
-import { BUILDINGS_BY_TYPE } from './building-catalogue';
+import * as BuildingCatalogue from './building-catalogue';
 
 export function allocateWorkers(colony: Colony): ReadonlyMap<number, number> {
   let available = colony.stocks.population;
@@ -9,7 +9,7 @@ export function allocateWorkers(colony: Colony): ReadonlyMap<number, number> {
   for (const building of [...colony.buildings].sort((a, b) => a.id - b.id)) {
     const assigned =
       building.completed && building.enabled
-        ? Math.min(available, BUILDINGS_BY_TYPE[building.type].workersRequired)
+        ? Math.min(available, BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].workersRequired)
         : 0;
     workers.set(building.id, assigned);
     available -= assigned;
@@ -21,7 +21,7 @@ export function colonyWorkforce(colony: Colony) {
   const workers = allocateWorkers(colony);
   const staffing = (building: PlacedBuilding): number => {
     if (!building.completed || !building.enabled) return 0;
-    const required = BUILDINGS_BY_TYPE[building.type].workersRequired;
+    const required = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].workersRequired;
     return required === 0 ? 1 : (workers.get(building.id) ?? 0) / required;
   };
   let capacity = 0;
@@ -29,7 +29,7 @@ export function colonyWorkforce(colony: Colony) {
   let constructionEnergy = 0;
   for (const building of colony.buildings) {
     if (!building.enabled) continue;
-    const definition = BUILDINGS_BY_TYPE[building.type];
+    const definition = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type];
     capacity += definition.energyGainFor(colony.planet) * staffing(building);
     reserved += definition.costEnergy;
     if (!building.completed) constructionEnergy += definition.costEnergy;
@@ -39,7 +39,7 @@ export function colonyWorkforce(colony: Colony) {
   const powered = new Set<number>();
   for (const building of [...colony.buildings].sort((a, b) => a.id - b.id)) {
     if (!building.completed || !building.enabled) continue;
-    const cost = BUILDINGS_BY_TYPE[building.type].costEnergy;
+    const cost = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].costEnergy;
     if (cost === 0) {
       powered.add(building.id);
     } else if (!overloaded && remaining >= cost) {
@@ -53,7 +53,8 @@ export function colonyWorkforce(colony: Colony) {
     powered.has(building.id) ? staffing(building) : 0;
   const status = (building: PlacedBuilding): BuildingStatus | null => {
     if (!building.completed) return BuildingStatus.Construction;
-    if (!building.enabled) return BuildingStatus.Disabled;
+    if (!building.enabled)
+      return building.disabledByFinance ? BuildingStatus.FinanciallyDisabled : BuildingStatus.Disabled;
     if (staffing(building) === 0) return BuildingStatus.NoWorkers;
     if (!powered.has(building.id)) return BuildingStatus.NoEnergy;
     return null;

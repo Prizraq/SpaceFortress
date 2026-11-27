@@ -18,11 +18,13 @@ import { PlanetMapComponent } from '../../../planet/components/planet-map/planet
 import { GameSessionService } from '../../../game-session/services/game-session.service';
 import { GameSaveControlsComponent } from '../../../game-save/components/game-save-controls/game-save-controls.component';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon.component';
+import { FinancialSummaryComponent } from '../../../game-session/components/financial-summary/financial-summary.component';
+import { FinancialWarningsComponent } from '../../../game-session/components/financial-warnings/financial-warnings.component';
 
 @Component({
   selector: 'app-solar-system',
   standalone: true,
-  imports: [PlanetPanelComponent, PlanetMapComponent, GameSaveControlsComponent, GameIconComponent],
+  imports: [PlanetPanelComponent, PlanetMapComponent, GameSaveControlsComponent, GameIconComponent, FinancialSummaryComponent, FinancialWarningsComponent],
   templateUrl: './solar-system.component.html',
   styleUrls: ['./solar-system.component.scss'],
   providers: [SolarSystemRendererService],

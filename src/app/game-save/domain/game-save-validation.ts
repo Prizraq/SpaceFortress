@@ -3,8 +3,8 @@ import { GAME_SAVE_VERSION, GameSave } from '../models/interface/game-save';
 import { SavedBuilding } from '../models/interface/saved-building';
 import { SavedColony } from '../models/interface/saved-colony';
 import { SavedPlanet } from '../models/interface/saved-planet';
-import { BUILDINGS_BY_TYPE } from '../../planet/domain/building-catalogue';
-import { gridSize, PRODUCTION_INTERVAL_MS } from '../../planet/domain/colony-simulation';
+import * as BuildingCatalogue from '../../planet/domain/building-catalogue';
+import * as ColonySimulation from '../../planet/domain/colony-simulation';
 
 function invalid(path: string, reason: string): never {
   throw new Error(`Сохранение: ${path} — ${reason}.`);
@@ -89,7 +89,7 @@ function readPlanet(input: unknown, path: string): SavedPlanet {
       gas: number(field(resources, 'gas', resourcesPath), `${resourcesPath}.gas`, 0, 100),
     },
   };
-  if (!Number.isSafeInteger(BUILDINGS_BY_TYPE[BuildingType.Power].energyGainFor(planet)))
+  if (!Number.isSafeInteger(BuildingCatalogue.BUILDINGS_BY_TYPE[BuildingType.Power].energyGainFor(planet)))
     invalid(`${path}.distanceFromSun`, 'расстояние даёт недопустимую энергомощность');
   if (!Number.isFinite(365 / planet.orbitalPeriod))
     invalid(`${path}.orbitalPeriod`, 'период слишком мал для орбитальной анимации');
@@ -111,6 +111,7 @@ function readBuilding(
   lastTick: number,
   ids: Set<number>,
   tiles: Set<number>,
+  version: number,
 ): SavedBuilding {
   const value = record(input, path);
   const building: SavedBuilding = {
@@ -121,10 +122,13 @@ function readBuilding(
     completesAt: number(field(value, 'completesAt', path), `${path}.completesAt`),
     completed: boolean(field(value, 'completed', path), `${path}.completed`),
     enabled: boolean(field(value, 'enabled', path), `${path}.enabled`),
+    disabledByFinance: version < 3
+      ? false
+      : boolean(field(value, 'disabledByFinance', path), `${path}.disabledByFinance`),
   };
   if (ids.has(building.id)) invalid(`${path}.id`, 'идентификатор здания повторяется');
   ids.add(building.id);
-  if (building.tile >= gridSize(planet.radius) ** 2)
+  if (building.tile >= ColonySimulation.gridSize(planet.radius) ** 2)
     invalid(`${path}.tile`, 'клетка находится за пределами карты');
   if (tiles.has(building.tile)) invalid(`${path}.tile`, 'клетка уже занята');
   tiles.add(building.tile);
@@ -142,6 +146,12 @@ function readBuilding(
       building.type === BuildingType.Housing)
   )
     invalid(`${path}.enabled`, 'незавершённое или защищённое здание нельзя отключить');
+  if (
+    building.disabledByFinance &&
+    (building.enabled || !building.completed ||
+      building.type === BuildingType.Base || building.type === BuildingType.Housing)
+  )
+    invalid(`${path}.disabledByFinance`, 'финансовое отключение требует завершённого отключённого незащищённого здания');
   return building;
 }
 
@@ -153,6 +163,7 @@ function readColony(
   lastTick: number,
   colonyIds: Set<string>,
   buildingIds: Set<number>,
+  version: number,
 ): SavedColony {
   const value = record(input, path);
   const planetId = identifier(field(value, 'planetId', path), `${path}.planetId`);
@@ -176,6 +187,7 @@ function readColony(
         lastTick,
         buildingIds,
         tiles,
+        version,
       ),
   );
   const bases = buildings.filter((building) => building.type === BuildingType.Base);
@@ -186,7 +198,7 @@ function readColony(
     if (
       !base?.completed ||
       building.startedAt <
-        Math.ceil(base.completesAt / PRODUCTION_INTERVAL_MS) * PRODUCTION_INTERVAL_MS
+        Math.ceil(base.completesAt / ColonySimulation.PRODUCTION_INTERVAL_MS) * ColonySimulation.PRODUCTION_INTERVAL_MS
     )
       invalid(`${path}.buildings`, 'здания требуют ранее завершённую главную базу');
   }
@@ -217,7 +229,7 @@ function readColony(
   };
 }
 
-function readVersion1(value: Record<string, unknown>): GameSave {
+function readSnapshot(value: Record<string, unknown>, version: number): GameSave {
   const savedAt = text(field(value, 'savedAt'), 'savedAt');
   const date = new Date(savedAt);
   if (!Number.isFinite(date.getTime()) || date.toISOString() !== savedAt)
@@ -225,9 +237,9 @@ function readVersion1(value: Record<string, unknown>): GameSave {
   const gameTime = number(field(value, 'gameTime'), 'gameTime');
   const lastTick = integer(field(value, 'lastProductionTick'), 'lastProductionTick');
   if (
-    lastTick % PRODUCTION_INTERVAL_MS !== 0 ||
+    lastTick % ColonySimulation.PRODUCTION_INTERVAL_MS !== 0 ||
     gameTime < lastTick ||
-    gameTime - lastTick >= PRODUCTION_INTERVAL_MS
+    gameTime - lastTick >= ColonySimulation.PRODUCTION_INTERVAL_MS
   )
     invalid('lastProductionTick', 'граница шага не согласована с игровым временем');
   const planets = Array.from(array(field(value, 'planets'), 'planets'), (planet, index) =>
@@ -242,19 +254,28 @@ function readVersion1(value: Record<string, unknown>): GameSave {
   const buildingIds = new Set<number>();
   const colonyIds = new Set<string>();
   const colonies = Array.from(array(field(value, 'colonies'), 'colonies'), (colony, index) =>
-    readColony(colony, `colonies[${index}]`, byId, gameTime, lastTick, colonyIds, buildingIds),
+    readColony(colony, `colonies[${index}]`, byId, gameTime, lastTick, colonyIds, buildingIds, version),
   );
   const nextBuildingId = integer(field(value, 'nextBuildingId'), 'nextBuildingId', 1);
   for (const id of buildingIds) {
     if (id >= nextBuildingId)
       invalid('nextBuildingId', 'следующий идентификатор должен быть больше всех существующих');
   }
+  const creditRemainder = version === 1
+    ? 0
+    : integer(field(value, 'creditRemainder'), 'creditRemainder');
+  if (creditRemainder >= 100)
+    invalid('creditRemainder', 'остаток должен быть от 0 до 99 сотых кредита');
   return {
     version: GAME_SAVE_VERSION,
     savedAt,
     gameTime,
     lastProductionTick: lastTick,
     credits: integer(field(value, 'credits'), 'credits'),
+    creditRemainder,
+    maintenanceShortfall: version === 1
+      ? 0
+      : integer(field(value, 'maintenanceShortfall'), 'maintenanceShortfall'),
     planets,
     colonies,
     nextBuildingId,
@@ -275,12 +296,14 @@ export function readGameSave(input: unknown): GameSave {
   const value = record(decoded, 'корень');
   const version = integer(field(value, 'version'), 'version');
   switch (version) {
+    case 1:
+    case 2:
     case GAME_SAVE_VERSION:
-      return readVersion1(value);
+      return readSnapshot(value, version);
     default:
       return invalid(
         'version',
-        `версия ${version} не поддерживается (поддерживается ${GAME_SAVE_VERSION})`,
+        `версия ${version} не поддерживается (поддерживаются 1, 2 и ${GAME_SAVE_VERSION})`,
       );
   }
 }

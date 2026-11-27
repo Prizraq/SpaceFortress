@@ -4,8 +4,8 @@ import { BuildingDefinition } from '../models/interface/building-definition';
 import { Colony } from '../models/interface/colony';
 import { PlanetStockpile } from '../models/interface/planet-stockpile';
 import { Planet } from '../../shared/models/interface/planet';
-import { BUILDINGS_BY_TYPE } from './building-catalogue';
-import { colonyWorkforce } from './colony-workforce';
+import * as BuildingCatalogue from './building-catalogue';
+import * as ColonyWorkforce from './colony-workforce';
 
 export const PRODUCTION_INTERVAL_MS = 2000;
 
@@ -42,13 +42,13 @@ export function foodEconomy(colony: Colony) {
 }
 
 export function waterEconomy(colony: Colony) {
-  const workforce = colonyWorkforce(colony);
+  const workforce = ColonyWorkforce.colonyWorkforce(colony);
   let production = 0;
   let consumption = populationWaterDemand(colony.stocks.population);
   const populationDemand = consumption;
   for (const building of colony.buildings) {
     if (!building.completed || !building.enabled) continue;
-    const definition = BUILDINGS_BY_TYPE[building.type];
+    const definition = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type];
     production += definition.waterSupply;
     const amount = Math.min(
       definition.availableYield(colony.planet, colony.deposits),
@@ -83,7 +83,7 @@ export function freezeColony(colony: Colony): Colony {
 }
 
 export function recalculateColonyWorkforce(colony: Colony): Colony {
-  const workforce = colonyWorkforce(colony);
+  const workforce = ColonyWorkforce.colonyWorkforce(colony);
   return {
     ...colony,
     stocks: { ...colony.stocks, energy: workforce.energy },
@@ -93,7 +93,8 @@ export function recalculateColonyWorkforce(colony: Colony): Colony {
         workforce.status(building) ??
         (building.status === BuildingStatus.NoWorkers ||
         building.status === BuildingStatus.NoEnergy ||
-        building.status === BuildingStatus.Disabled
+        building.status === BuildingStatus.Disabled ||
+        building.status === BuildingStatus.FinanciallyDisabled
           ? BuildingStatus.Working
           : building.status),
     })),
@@ -122,7 +123,7 @@ export function recalculateColony(colony: Colony): Colony {
     ...colony.stocks,
     populationCapacity: colony.buildings.reduce(
       (capacity, building) =>
-        capacity + (building.completed ? BUILDINGS_BY_TYPE[building.type].populationCapacity : 0),
+        capacity + (building.completed ? BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].populationCapacity : 0),
       0,
     ),
   };
@@ -164,7 +165,7 @@ export function advanceColony(colony: Colony, now: number): Colony {
   runIndustry(colony, stocks, deposits, statuses, lifeSupport);
   const buildings = colony.buildings.map((building) => {
     if (!building.completed && now >= building.completesAt) {
-      BUILDINGS_BY_TYPE[building.type].complete(stocks);
+      BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].complete(stocks);
       return { ...building, completed: true, status: BuildingStatus.Working };
     }
     return { ...building, status: statuses.get(building.id) ?? building.status };
@@ -180,7 +181,7 @@ function runIndustry(
   { active, workforce }: ReturnType<typeof runLifeSupport>,
 ): void {
   for (const building of active) {
-    const definition = BUILDINGS_BY_TYPE[building.type];
+    const definition = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type];
     if (
       definition.production === ProducedResource.Water ||
       definition.production === ProducedResource.Food
@@ -199,7 +200,7 @@ function runLifeSupport(
   deposits: Pick<PlanetStockpile, 'minerals' | 'gas'>,
   statuses: Map<number, BuildingStatus>,
 ) {
-  const workforce = colonyWorkforce(colony);
+  const workforce = ColonyWorkforce.colonyWorkforce(colony);
   const active = colony.buildings
     .filter((building) => {
       const status = workforce.status(building);
@@ -210,10 +211,10 @@ function runLifeSupport(
   const initialFood = stocks.food;
   const initialWater = stocks.water;
   for (const building of active) {
-    BUILDINGS_BY_TYPE[building.type].provideLifeSupport(stocks);
+    BuildingCatalogue.BUILDINGS_BY_TYPE[building.type].provideLifeSupport(stocks);
   }
   for (const building of active) {
-    const definition = BUILDINGS_BY_TYPE[building.type];
+    const definition = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type];
     if (definition.production !== ProducedResource.Water) continue;
     statuses.set(
       building.id,
@@ -225,7 +226,7 @@ function runLifeSupport(
   // Keep tenths exact so repeated consumption cannot leave floating-point residue.
   stocks.water = Math.max(0, Math.round(stocks.water * 10) - stocks.population) / 10;
   for (const building of active) {
-    const definition = BUILDINGS_BY_TYPE[building.type];
+    const definition = BuildingCatalogue.BUILDINGS_BY_TYPE[building.type];
     if (definition.production !== ProducedResource.Food) continue;
     statuses.set(
       building.id,

@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { inject, Injectable } from '@angular/core';
-import { readGameSave } from '../domain/game-save-validation';
+import * as GameSaveValidation from '../domain/game-save-validation';
 import { GameSave } from '../models/interface/game-save';
 import { GameSaveFileService } from './game-save-file.service';
 
@@ -29,7 +29,7 @@ export class GameSaveStorageService {
 
   read(): GameSave | null {
     const raw = this.readRaw();
-    return raw === null ? null : readGameSave(raw);
+    return raw === null ? null : GameSaveValidation.readGameSave(raw);
   }
 
   downloadRaw(raw: string): void {
@@ -37,7 +37,7 @@ export class GameSaveStorageService {
   }
 
   write(save: GameSave): void {
-    const json = JSON.stringify(readGameSave(save));
+    const json = JSON.stringify(GameSaveValidation.readGameSave(save));
     try {
       this.storage.setItem(GAME_SAVE_STORAGE_KEY, json);
     } catch (error) {

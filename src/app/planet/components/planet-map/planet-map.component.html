@@ -13,7 +13,7 @@
     <div class="resource-bar" aria-label="Ресурсы колонии">
       <div class="credits">
         <app-game-icon name="credits" /><span>Кредиты <small>ОБЩИЙ СЧЁТ</small></span
-        ><strong data-resource="credits">{{ game.credits() }}</strong>
+        ><strong data-resource="credits">{{ creditText() }}</strong>
       </div>
       <div>
         <app-game-icon name="minerals" /><span>Минералы</span
@@ -83,8 +83,13 @@
       </div>
     </div>
 
-    <div class="workspace">
-      <aside class="catalogue" aria-label="Каталог зданий">
+    <div
+      #workspace
+      class="workspace"
+      [style.--catalogue-width]="panelWidths().catalogue + 'px'"
+      [style.--inspector-width]="panelWidths().inspector + 'px'"
+    >
+      <aside class="catalogue" [id]="surfacePatternId + '-catalogue'" aria-label="Каталог зданий">
         <div class="section-heading">
           <h2>Строительство</h2>
           <span>{{ catalogue.length }}</span>
@@ -123,7 +128,7 @@
               </div>
             </div>
             <div class="costs" aria-label="Стоимость строительства">
-              <span title="Кредиты"
+              <span title="Разовая цена строительства в кредитах"
                 ><app-game-icon name="credits" />{{ definition.costCredits }}</span
               >
               <span title="Минералы"
@@ -151,6 +156,21 @@
                 >
               }
             </div>
+            <p class="availability" data-catalogue-maintenance>
+              Разовая цена: {{ definition.costCredits }} кредитов.
+              Содержание: {{ maintenancePerMinute(definition.type) }} / игровую мин.
+              @if (maintenancePerMinute(definition.type)) {
+                Оплата после завершения, пока здание включено, даже при простое.
+                Сейчас в колонии оплачиваются: {{ paidBuildings(definition.type) }}.
+              } @else {
+                Оплата содержания не требуется.
+              }
+            </p>
+            @if (financiallyDisabledBuildings(definition.type); as count) {
+              <p class="availability" data-catalogue-financial-disable>
+                Отключено из-за недостатка кредитов: {{ count }}. Включение — вручную.
+              </p>
+            }
             <button
               type="button"
               class="build-button"
@@ -170,19 +190,26 @@
         }
       </aside>
 
+      <div
+        class="panel-resizer"
+        role="separator"
+        tabindex="0"
+        aria-label="Ширина каталога зданий"
+        title="Перетащите для изменения ширины; стрелки — точная настройка"
+        aria-orientation="vertical"
+        [attr.aria-controls]="surfacePatternId + '-catalogue'"
+        [attr.aria-valuemin]="minimumPanelWidth"
+        [attr.aria-valuemax]="maximumPanelWidth()"
+        [attr.aria-valuenow]="panelWidths().catalogue"
+        (pointerdown)="startPanelResize($event, 'catalogue')"
+        (pointermove)="movePanelResize($event)"
+        (pointerup)="endPanelResize($event)"
+        (pointercancel)="endPanelResize($event)"
+        (lostpointercapture)="endPanelResize($event)"
+        (keydown)="resizePanelWithKeyboard($event, 'catalogue')"
+      ></div>
+
       <main class="surface">
-        <div class="surface-heading">
-          <div>
-            <span class="eyebrow">ПОВЕРХНОСТЬ / СЕКТОР 01</span>
-            <h2>Планетарная сетка</h2>
-          </div>
-          <span
-            >{{ side() }} × {{ side()
-            }}<small
-              >{{ colony.buildings.length }} / {{ geometry().tiles.length }} участков</small
-            ></span
-          >
-        </div>
         <div class="map-controls">
           <span class="map-status">{{
             blueprint() ? game.definition(blueprint()!).name : 'ОРБИТАЛЬНАЯ СЪЁМКА'
@@ -339,9 +366,86 @@
         </p>
       </main>
 
-      <aside class="inspector" aria-label="Информация об участке">
+      <div
+        class="panel-resizer"
+        role="separator"
+        tabindex="0"
+        aria-label="Ширина информационной панели"
+        title="Перетащите для изменения ширины; стрелки — точная настройка"
+        aria-orientation="vertical"
+        [attr.aria-controls]="surfacePatternId + '-details'"
+        [attr.aria-valuemin]="minimumPanelWidth"
+        [attr.aria-valuemax]="maximumPanelWidth()"
+        [attr.aria-valuenow]="panelWidths().inspector"
+        (pointerdown)="startPanelResize($event, 'inspector')"
+        (pointermove)="movePanelResize($event)"
+        (pointerup)="endPanelResize($event)"
+        (pointercancel)="endPanelResize($event)"
+        (lostpointercapture)="endPanelResize($event)"
+        (keydown)="resizePanelWithKeyboard($event, 'inspector')"
+      ></div>
+
+      <aside class="details-panel" [id]="surfacePatternId + '-details'" aria-label="Информация о планете и колонии">
+        <div class="panel-tabs" role="tablist" aria-label="Разделы информации о колонии">
+          @for (tab of tabs; track tab.id) {
+            <button
+              #panelTab
+              type="button"
+              role="tab"
+              [id]="surfacePatternId + '-tab-' + tab.id"
+              [attr.aria-controls]="surfacePatternId + '-panel-' + tab.id"
+              [attr.aria-selected]="activeTab() === tab.id"
+              [tabIndex]="activeTab() === tab.id ? 0 : -1"
+              (click)="activeTab.set(tab.id)"
+              (keydown)="navigateTabs($event, $index)"
+            >{{ tab.label }}</button>
+          }
+        </div>
+        <section
+          class="tab-content overview"
+          role="tabpanel"
+          tabindex="0"
+          [id]="surfacePatternId + '-panel-overview'"
+          [attr.aria-labelledby]="surfacePatternId + '-tab-overview'"
+          [hidden]="activeTab() !== 'overview'"
+        >
+          <div class="section-heading"><h2>{{ planet().name }}</h2></div>
+          <span class="eyebrow">ПЛАНЕТАРНАЯ ТЕЛЕМЕТРИЯ</span>
+          <dl>
+            <div><dt>Атмосфера</dt><dd>{{ planet().athmosphere ? 'Есть' : 'Нет' }}</dd></div>
+            <div><dt>Орбита</dt><dd>{{ planet().distanceFromSun }} а.е.</dd></div>
+            <div><dt>Период обращения</dt><dd>{{ resourceNumbers.format(planet().orbitalPeriod) }} сут.</dd></div>
+            <div><dt>Радиус</dt><dd>{{ resourceNumbers.format(planet().radius) }} км</dd></div>
+            <div><dt>Масса</dt><dd>{{ planet().mass }} М⊕</dd></div>
+            <div><dt>Гравитация</dt><dd>{{ planet().gravity }} м/с²</dd></div>
+            <div><dt>Содержание минералов</dt><dd>{{ planet().resourses.minerals }}%</dd></div>
+            <div><dt>Содержание воды</dt><dd>{{ planet().resourses.water }}%</dd></div>
+            <div><dt>Содержание газа</dt><dd>{{ planet().resourses.gas }}%</dd></div>
+          </dl>
+          <h2>Сводка колонии</h2>
+          <dl data-colony-overview>
+            <div><dt>Население / лимит</dt><dd>{{ colony.stocks.population }} / {{ colony.stocks.populationCapacity }}</dd></div>
+            <div><dt>Работают</dt><dd>{{ workforce().employed }}</dd></div>
+            <div><dt>Безработные</dt><dd>{{ colony.stocks.population - workforce().employed }}</dd></div>
+            <div><dt>Постройки / участки</dt><dd>{{ colony.buildings.length }} / {{ geometry().tiles.length }}</dd></div>
+            <div><dt>Размер сетки</dt><dd>{{ side() }} × {{ side() }}</dd></div>
+            <div><dt>Свободная энергия</dt><dd>{{ resourceNumbers.format(colony.stocks.energy) }}</dd></div>
+            <div><dt>Минеральные запасы</dt><dd>{{ resourceNumbers.format(colony.deposits.minerals) }}</dd></div>
+            <div><dt>Газовые запасы</dt><dd>{{ resourceNumbers.format(colony.deposits.gas) }}</dd></div>
+            <div><dt>Баланс воды / цикл</dt><dd>{{ water().balance > 0 ? '+' : '' }}{{ resourceNumbers.format(water().balance) }}</dd></div>
+            <div><dt>Баланс пищи / цикл</dt><dd>{{ food().balance > 0 ? '+' : '' }}{{ resourceNumbers.format(food().balance) }}</dd></div>
+          </dl>
+        </section>
+        <section
+          class="tab-content inspector"
+          role="tabpanel"
+          tabindex="0"
+          [id]="surfacePatternId + '-panel-building'"
+          [attr.aria-labelledby]="surfacePatternId + '-tab-building'"
+          [hidden]="activeTab() !== 'building'"
+        >
         <div class="section-heading">
-          <h2>{{ selectedTile() === null ? 'Планета' : 'Участок ' + (selectedTile()! + 1) }}</h2>
+          <h2>{{ selectedTile() === null ? 'Здание' : 'Участок ' + (selectedTile()! + 1) }}</h2>
           <span>01</span>
         </div>
         @if (inspected(); as building) {
@@ -361,6 +465,32 @@
             <div>
               <dt>Состояние</dt>
               <dd>{{ statusLabels[building.status] }}</dd>
+            </div>
+            <div>
+              <dt>Цена строительства (разово)</dt>
+              <dd data-building-price>{{ definition.costCredits }} кредитов</dd>
+            </div>
+            <div>
+              <dt>Ставка содержания / игровую мин</dt>
+              <dd data-building-maintenance-rate>{{ maintenancePerMinute(building.type) }}</dd>
+            </div>
+            <div>
+              <dt>Текущее содержание / игровую мин</dt>
+              <dd data-building-maintenance>{{ buildingMaintenancePerMinute(building) }}</dd>
+            </div>
+            <div>
+              <dt>Оплата сейчас</dt>
+              <dd data-building-payment>
+                @if (!maintenancePerMinute(building.type)) {
+                  Не требуется
+                } @else if (!building.completed) {
+                  Нет: строительство не завершено
+                } @else if (!building.enabled) {
+                  Нет: здание отключено
+                } @else {
+                  Требуется, даже при простое
+                }
+              </dd>
             </div>
             <div>
               <dt>Работники</dt>
@@ -440,6 +570,9 @@
               <dd>{{ definition.buildTime }} с</dd>
             </div>
           </dl>
+          @if (building.disabledByFinance) {
+            <p data-building-financial-disable>Отключено: недостаточно кредитов. Включение — вручную; при нехватке денег здание снова отключится на следующем шаге.</p>
+          }
           @if (!building.completed) {
             <div class="construction-progress">
               <span [style.width.%]="progress(building)"></span>
@@ -500,30 +633,24 @@
             }
           }
         } @else {
-          <div class="inspection-icon"><app-game-icon name="base" /></div>
           <span class="eyebrow">{{
-            selectedTile() === null ? 'РЕСУРСНЫЙ ПОТЕНЦИАЛ' : 'НЕОСВОЕННАЯ ТЕРРИТОРИЯ'
+            selectedTile() === null ? 'ОБЪЕКТ НЕ ВЫБРАН' : 'НЕОСВОЕННАЯ ТЕРРИТОРИЯ'
           }}</span>
-          <h3>{{ selectedTile() === null ? planet().name : 'Свободный участок' }}</h3>
-          <dl>
-            <div>
-              <dt>Минеральные запасы</dt>
-              <dd>{{ resourceNumbers.format(colony.deposits.minerals) }}</dd>
-            </div>
-            <div>
-              <dt>Газовые запасы</dt>
-              <dd>{{ resourceNumbers.format(colony.deposits.gas) }}</dd>
-            </div>
-            <div>
-              <dt>Содержание воды</dt>
-              <dd>{{ planet().resourses.water }}%</dd>
-            </div>
-            <div>
-              <dt>Атмосфера</dt>
-              <dd>{{ planet().athmosphere ? 'Есть' : 'Нет' }}</dd>
-            </div>
-          </dl>
+          <h3>{{ selectedTile() === null ? 'Выберите здание на карте' : 'Свободный участок' }}</h3>
+          <p>Выберите существующее здание для просмотра и управления или постройте новое из каталога слева.</p>
         }
+        </section>
+        <section
+          class="tab-content finances"
+          role="tabpanel"
+          tabindex="0"
+          [id]="surfacePatternId + '-panel-finances'"
+          [attr.aria-labelledby]="surfacePatternId + '-tab-finances'"
+          [hidden]="activeTab() !== 'finances'"
+        >
+          <div class="section-heading"><h2>Финансы колонии</h2></div>
+          <app-financial-summary [colonyId]="planet().id" />
+        </section>
       </aside>
     </div>
   </div>

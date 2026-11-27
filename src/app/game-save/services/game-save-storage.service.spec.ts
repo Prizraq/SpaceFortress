@@ -11,6 +11,8 @@ function snapshot(): GameSave {
     gameTime: 1500,
     lastProductionTick: 0,
     credits: 2000,
+    creditRemainder: 0,
+    maintenanceShortfall: 0,
     planets: new PlanetService().getPlanets(),
     colonies: [],
     nextBuildingId: 1,
@@ -51,7 +53,7 @@ describe('GameSaveStorageService', () => {
 
   it.each([
     ['broken JSON', '{"version":', 'JSON'],
-    ['unsupported version', '{"version":2}', 'не поддерживается'],
+    ['unsupported version', '{"version":4}', 'не поддерживается'],
     ['invalid fields', JSON.stringify({ ...snapshot(), gameTime: -1 }), 'gameTime'],
   ])('rejects %s without deleting or overwriting it', (_name, raw, reason) => {
     localStorage.setItem(GAME_SAVE_STORAGE_KEY, raw);

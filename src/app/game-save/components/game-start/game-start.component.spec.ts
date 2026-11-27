@@ -203,7 +203,7 @@ describe('GameStartComponent', () => {
 
   it.each([
     ['{"version":broken}\noriginal text', 'JSON'],
-    ['{"version":2}', 'не поддерживается'],
+    ['{"version":4}', 'не поддерживается'],
     ['', 'JSON'],
   ])(
     'retains and offers the exact invalid input %s for download without parsing it',

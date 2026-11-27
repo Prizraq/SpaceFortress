@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
-import { readGameSave } from '../domain/game-save-validation';
+import * as GameSaveValidation from '../domain/game-save-validation';
 import { GameSave } from '../models/interface/game-save';
 import { GameSessionService } from '../../game-session/services/game-session.service';
 import { GameSaveStorageService } from './game-save-storage.service';
@@ -167,7 +167,7 @@ export class GameSaveService {
     try {
       const text = await this.files.read(file, operation.controller.signal);
       if (this.importOperation !== operation) return;
-      operation.saved = readGameSave(text);
+      operation.saved = GameSaveValidation.readGameSave(text);
       this.importPreviewState.set({
         fileName: file.name,
         savedAt: operation.saved.savedAt,

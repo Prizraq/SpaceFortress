@@ -1,7 +1,7 @@
 import { effect } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { foodEconomy, waterEconomy } from '../../planet/domain/colony-simulation';
+import * as ColonySimulation from '../../planet/domain/colony-simulation';
 import { BuildingStatus } from '../../planet/models/enum/building-status';
 import { BuildingType } from '../../planet/models/enum/building-type';
 import { GameSave } from '../models/interface/game-save';
@@ -40,6 +40,7 @@ describe('GameSaveService', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     localStorage.removeItem(GAME_SAVE_STORAGE_KEY);
   });
@@ -70,7 +71,7 @@ describe('GameSaveService', () => {
     vi.advanceTimersByTime(4000);
     game.build(planet, BuildingType.Minerals, 1);
     const initial = game.colonies()[planet.id];
-    const amount = game.yieldFor(planet, game.definition(BuildingType.Minerals));
+    const amount = Math.round(game.yieldFor(planet, game.definition(BuildingType.Minerals)) * 5 / 6 * 10) / 10;
     vi.advanceTimersByTime(26000);
     const saved = storage.read();
     expect(saved?.lastProductionTick).toBe(30000);
@@ -314,6 +315,7 @@ describe('GameSaveService', () => {
                 startedAt,
                 completesAt: startedAt + game.definition(type).buildTime * 1000,
                 completed: type !== BuildingType.Water,
+                disabledByFinance: false,
                 enabled:
                   type !== BuildingType.Gas &&
                   !(type === BuildingType.Farm && crisis === 'food') &&
@@ -333,6 +335,7 @@ describe('GameSaveService', () => {
               completesAt: (index === 0 ? 0 : 4000) + game.definition(type).buildTime * 1000,
               completed: true,
               enabled: true,
+              disabledByFinance: false,
             })),
           },
         ],
@@ -340,8 +343,8 @@ describe('GameSaveService', () => {
       game.restoreSave(source);
       start();
       const colony = game.colonies()[planet.id];
-      if (crisis === 'food') expect(foodEconomy(colony).balance).toBeLessThan(0);
-      if (crisis === 'water') expect(waterEconomy(colony).populationSupplied).toBe(false);
+      if (crisis === 'food') expect(ColonySimulation.foodEconomy(colony).balance).toBeLessThan(0);
+      if (crisis === 'water') expect(ColonySimulation.waterEconomy(colony).populationSupplied).toBe(false);
       if (crisis === 'energy') {
         expect(colony.stocks.energy).toBeLessThan(0);
         expect(colony.buildings[5].status).toBe(BuildingStatus.NoEnergy);
@@ -357,7 +360,7 @@ describe('GameSaveService', () => {
       if (crisis !== 'energy') expect(firstStep.colonies[0].stocks.population).toBe(24);
       expect(firstStep.colonies[1].stocks.minerals).toBe(
         source.colonies[1].stocks.minerals +
-          game.yieldFor(other, game.definition(BuildingType.Minerals)),
+          Math.round(game.yieldFor(other, game.definition(BuildingType.Minerals)) * 5 / 6 * 10) / 10,
       );
       vi.advanceTimersByTime(5000);
       const expected = game.createSave(date);
@@ -441,6 +444,84 @@ describe('GameSaveService', () => {
     expect(saves.fileMessage()).toContain('подготовлен');
   });
 
+  it('exports and imports exact cents and a financial shutdown through Blob and FileReader without counting import waiting time', async () => {
+    start();
+    const planet = game.planets()[1];
+    game.openPlanet(planet);
+    game.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    game.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(6000);
+    const initial = game.createSave(new Date());
+    game.restoreSave({
+      ...initial, credits: 10, creditRemainder: 73,
+      colonies: initial.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 3 },
+        buildings: colony.buildings.map((building) => building.type === BuildingType.Minerals
+          ? { ...building, enabled: false, disabledByFinance: true } : building),
+      })),
+    });
+    vi.advanceTimersByTime(3000);
+    const exported = game.createSave(new Date());
+    expect(exported).toMatchObject({
+      version: 3, credits: 11, creditRemainder: 33, gameTime: 13000, lastProductionTick: 12000,
+    });
+    const create = vi.fn<(blob: Blob | MediaSource) => string>().mockReturnValue('blob:tax-save');
+    vi.stubGlobal('URL', class extends URL {
+      static override createObjectURL = create;
+      static override revokeObjectURL = vi.fn<(url: string) => void>();
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    saves.exportSave();
+    expect(saves.fileError()).toBeNull();
+    const blob = create.mock.calls[0][0];
+    if (!(blob instanceof Blob)) throw new Error('Expected exported JSON Blob');
+    expect(blob.type).toBe('application/json;charset=utf-8');
+    vi.advanceTimersByTime(6000);
+    const uninterrupted = game.createSave(new Date());
+    expect(uninterrupted).toMatchObject({ credits: 14, creditRemainder: 13 });
+    expect(saves.beginImport()).toBe(true);
+    const reading = saves.readImport(new File([blob], 'tax-save.json'));
+    await vi.advanceTimersByTimeAsync(10);
+    await reading;
+    expect(saves.importPreview()?.gameTime).toBe(13000);
+    vi.advanceTimersByTime(60000);
+    expect(game.createSave(new Date(uninterrupted.savedAt))).toEqual(uninterrupted);
+    saves.confirmImport();
+    expect(saves.fileError()).toBeNull();
+    expect(game.createSave(new Date(exported.savedAt))).toEqual(exported);
+    expect(game.colonies()[planet.id].buildings[1]).toMatchObject({
+      enabled: false, disabledByFinance: true, status: BuildingStatus.FinanciallyDisabled,
+    });
+    const stored = storage.read();
+    expect(stored).toEqual({ ...exported, savedAt: stored?.savedAt });
+    vi.advanceTimersByTime(6000);
+    expect(game.createSave(new Date(uninterrupted.savedAt))).toEqual(uninterrupted);
+    saves.newGame();
+    expect(game.createSave(new Date())).toMatchObject({
+      credits: 2000, creditRemainder: 0, maintenanceShortfall: 0,
+      colonies: [], gameTime: 0, lastProductionTick: 0,
+    });
+  });
+
+  it('imports v1 without scaling credits and writes the migrated v3 snapshot locally', async () => {
+    start();
+    game.openPlanet(game.planets()[1]);
+    const legacy = { ...game.createSave(new Date()), version: 1, credits: 777 };
+    Reflect.deleteProperty(legacy, 'creditRemainder');
+    Reflect.deleteProperty(legacy, 'maintenanceShortfall');
+    vi.spyOn(files, 'read').mockResolvedValue(JSON.stringify(legacy));
+    saves.beginImport();
+    await saves.readImport(new File(['legacy'], 'v1.json'));
+    vi.advanceTimersByTime(60000);
+    saves.confirmImport();
+    expect(saves.fileError()).toBeNull();
+    expect(game.credits()).toBe(777);
+    expect(storage.read()).toMatchObject({
+      version: 3, credits: 777, creditRemainder: 0, maintenanceShortfall: 0, gameTime: 0,
+    });
+  });
+
   it('round-trips an exported session only after confirmation and excludes all import waiting time', async () => {
     start();
     const planet = game.planets()[1];
@@ -475,7 +556,7 @@ describe('GameSaveService', () => {
     expect(stored).toEqual({ ...exported, savedAt: stored?.savedAt });
     expect(saves.lastSavedAt()).toBe(stored?.savedAt);
     const minerals = game.colonies()[planet.id].stocks.minerals;
-    const production = game.yieldFor(planet, game.definition(BuildingType.Minerals));
+    const production = Math.round(game.yieldFor(planet, game.definition(BuildingType.Minerals)) * 5 / 6 * 10) / 10;
     vi.advanceTimersByTime(1000);
     expect(game.clock()).toBe(10000);
     expect(game.colonies()[planet.id].buildings[1].completed).toBe(false);
@@ -507,14 +588,19 @@ describe('GameSaveService', () => {
 
   it.each([
     ['{"version":broken}', 'JSON'],
-    ['{"version":2}', 'не поддерживается'],
+    ['{"version":4}', 'не поддерживается'],
     ['invalid-fields', 'credits'],
+    ['invalid-cents', 'creditRemainder'],
   ])('rejects invalid import %s without replacing or saving anything', async (text, reason) => {
     start(true);
     saves.save();
     const before = game.createSave(new Date());
     const raw = localStorage.getItem(GAME_SAVE_STORAGE_KEY);
-    const input = text === 'invalid-fields' ? JSON.stringify({ ...before, credits: -1 }) : text;
+    const input = text === 'invalid-fields'
+      ? JSON.stringify({ ...before, credits: -1 })
+      : text === 'invalid-cents'
+        ? JSON.stringify({ ...before, creditRemainder: 100 })
+        : text;
     vi.spyOn(files, 'read').mockResolvedValue(input);
     const restore = vi.spyOn(game, 'restoreSave');
     saves.beginImport();

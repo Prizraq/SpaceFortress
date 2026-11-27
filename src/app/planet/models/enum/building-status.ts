@@ -6,4 +6,5 @@ export enum BuildingStatus {
   NoWater = 'no-water',
   NoWorkers = 'no-workers',
   Disabled = 'disabled',
+  FinanciallyDisabled = 'financially-disabled',
 }

@@ -9,5 +9,6 @@ export interface PlacedBuilding {
   readonly completesAt: number;
   readonly completed: boolean;
   readonly enabled: boolean;
+  readonly disabledByFinance?: boolean;
   readonly status: BuildingStatus;
 }

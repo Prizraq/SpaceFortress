@@ -85,6 +85,187 @@ describe('PlanetMapComponent', () => {
       }),
     );
 
+  it('switches between live colony overview, selected building and local finances without losing selection', () => {
+    const tabs = Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+    const panels = Array.from(fixture.nativeElement.querySelectorAll('[role="tabpanel"]')) as HTMLElement[];
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Планета', 'Здание', 'Финансы']);
+    expect(panels.map((panel) => panel.hidden)).toEqual([false, true, true]);
+    expect(panels[0].textContent).toContain('Гравитация');
+    expect(fixture.nativeElement.textContent).not.toContain('Планетарная сетка');
+    component.game.build(component.planet(), BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    fixture.detectChanges();
+    expect(panels[0].querySelector('[data-colony-overview]')?.textContent).toContain('5 / 5');
+    component.selectTile(0);
+    fixture.detectChanges();
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(panels[1].textContent).toContain('Главная база');
+    tabs[2].click();
+    fixture.detectChanges();
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, true, false]);
+    expect(panels[2].querySelector('[data-local-finances]')?.textContent).toContain('доход 30');
+    tabs[0].click();
+    tabs[1].click();
+    fixture.detectChanges();
+    expect(component.selectedTile()).toBe(0);
+    expect(panels[1].hidden).toBe(false);
+    fixture.componentRef.setInput('planet', new PlanetService().getPlanets()[0]);
+    fixture.detectChanges();
+    expect(panels[0].hidden).toBe(false);
+    expect(component.selectedTile()).toBeNull();
+  });
+
+  it('supports arrow, Home and End navigation between information tabs', () => {
+    const tabs = Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+    tabs[0].focus();
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(tabs[2]);
+    expect(tabs[2].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[0].tabIndex).toBe(-1);
+    tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(tabs[0]);
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(tabs[2]);
+    tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(tabs[0]);
+  });
+
+  it.each([
+    { index: 0, delta: 80, width: '344px', property: '--catalogue-width' },
+    { index: 1, delta: -80, width: '400px', property: '--inspector-width' },
+  ])('resizes side panel $index with pointer capture and stops on cancellation', ({ index, delta, width, property }) => {
+    const handles = fixture.nativeElement.querySelectorAll('[role="separator"]') as NodeListOf<HTMLElement>;
+    const handle = handles[index];
+    handle.setPointerCapture = vi.fn();
+    handle.hasPointerCapture = vi.fn(() => true);
+    handle.releasePointerCapture = vi.fn();
+    pointer(handle, 'pointerdown', 500, 100);
+    pointer(handle, 'pointermove', 500 + delta, 100, { pointerId: 2 });
+    expect(component.panelWidths()).toEqual({ catalogue: 264, inspector: 320 });
+    pointer(handle, 'pointermove', 500 + delta, 100);
+    fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('.workspace') as HTMLElement).style.getPropertyValue(property)).toBe(width);
+    expect(handle.setPointerCapture).toHaveBeenCalledWith(1);
+    pointer(handle, 'pointercancel', 500 + delta, 100);
+    expect(handle.releasePointerCapture).toHaveBeenCalledWith(1);
+    pointer(handle, 'pointermove', 1000, 100);
+    fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('.workspace') as HTMLElement).style.getPropertyValue(property)).toBe(width);
+  });
+
+  it('bounds keyboard resizing and adapts panel widths when the workspace shrinks', () => {
+    const handles = fixture.nativeElement.querySelectorAll('[role="separator"]') as NodeListOf<HTMLElement>;
+    const key = (index: number, value: string) =>
+      handles[index].dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }));
+    key(0, 'ArrowRight');
+    key(1, 'ArrowLeft');
+    expect(component.panelWidths()).toEqual({ catalogue: 280, inspector: 336 });
+    key(0, 'Home');
+    key(0, 'ArrowLeft');
+    key(1, 'End');
+    key(1, 'ArrowLeft');
+    expect(component.panelWidths()).toEqual({ catalogue: 200, inspector: 480 });
+    const workspace = fixture.nativeElement.querySelector('.workspace') as HTMLElement;
+    vi.spyOn(workspace, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 600));
+    resizeViewport();
+    fixture.detectChanges();
+    expect(component.panelWidths()).toEqual({ catalogue: 200, inspector: 350 });
+    expect(handles[1].getAttribute('aria-valuemax')).toBe('350');
+    expect(handles[1].getAttribute('aria-valuenow')).toBe('350');
+  });
+
+  it('shows local and shared flows, construction maintenance, and its disabled-state change', () => {
+    const game = component.game;
+    const planet = component.planet();
+    game.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    game.build(planet, BuildingType.Minerals, 1);
+    component.selectTile(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-local-finances]').textContent)
+      .toContain('доход 30, расходы 0, вклад +30');
+    expect(fixture.nativeElement.querySelector('[data-building-price]').textContent).toContain('120 кредитов');
+    expect(fixture.nativeElement.querySelector('[data-building-maintenance-rate]').textContent.trim()).toBe('15');
+    expect(fixture.nativeElement.querySelector('[data-building-payment]').textContent).toContain('строительство не завершено');
+    expect(fixture.nativeElement.querySelector('[data-building-maintenance]').textContent.trim())
+      .toBe('0');
+    expect(fixture.nativeElement.querySelectorAll('[data-catalogue-maintenance]')[3].textContent)
+      .toContain('15 / игровую мин');
+    vi.advanceTimersByTime(6000);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-local-finances]').textContent)
+      .toContain('доход 30, расходы 15, вклад +15');
+    expect(fixture.nativeElement.querySelector('[data-building-payment]').textContent).toContain('Требуется, даже при простое');
+    expect(fixture.nativeElement.querySelectorAll('[data-catalogue-maintenance]')[3].textContent).toContain('оплачиваются: 1');
+    expect(fixture.nativeElement.querySelector('[data-building-maintenance]').textContent.trim())
+      .toBe('15');
+    component.toggleBuilding();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-building-maintenance]').textContent.trim())
+      .toBe('0');
+    expect(fixture.nativeElement.querySelector('[data-building-maintenance-rate]').textContent.trim()).toBe('15');
+    expect(fixture.nativeElement.querySelector('[data-building-payment]').textContent).toContain('здание отключено');
+    expect(fixture.nativeElement.querySelectorAll('[data-catalogue-maintenance]')[3].textContent).toContain('оплачиваются: 0');
+  });
+
+  it('displays the exact large credit balance consistently in resources and the financial summary', () => {
+    const game = component.game;
+    game.restoreSave({ ...game.createSave(new Date()), credits: Number.MAX_SAFE_INTEGER, creditRemainder: 65 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-resource="credits"]').textContent).toBe('9007199254740991,65');
+    expect(fixture.nativeElement.querySelector('[data-financial-credits]').textContent).toBe('9007199254740991,65');
+  });
+
+  it('shows the financial disable reason without pretending unpaid mines keep working', () => {
+    const game = component.game;
+    const planet = component.planet();
+    game.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    game.build(planet, BuildingType.Minerals, 1);
+    game.build(planet, BuildingType.Gas, 2);
+    vi.advanceTimersByTime(6000);
+    const saved = game.createSave(new Date());
+    game.restoreSave({
+      ...saved, credits: 0, creditRemainder: 0,
+      colonies: saved.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 1 },
+      })),
+    });
+    vi.advanceTimersByTime(2000);
+    component.selectTile(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-maintenance-shortfall]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('app-financial-summary').textContent)
+      .toContain('Содержание шахт списывается');
+    expect(fixture.nativeElement.querySelector('.inspector').textContent)
+      .toContain('Отключено: недостаточно кредитов');
+    expect(fixture.nativeElement.querySelector('[data-building-financial-disable]').textContent).toContain('Включение — вручную');
+    expect(fixture.nativeElement.querySelectorAll('[data-catalogue-financial-disable]')).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('[data-resource="credits"]').textContent).toBe('0,2');
+  });
+
+  it('shows free upkeep and removes maintenance from the shared forecast after demolition', () => {
+    const planet = component.planet();
+    component.game.build(planet, BuildingType.Base, 0);
+    vi.advanceTimersByTime(4000);
+    component.selectTile(0);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-building-payment]').textContent).toContain('Не требуется');
+    expect(fixture.nativeElement.querySelector('[data-building-price]').textContent).toContain('200 кредитов');
+    component.game.build(planet, BuildingType.Minerals, 1);
+    vi.advanceTimersByTime(6000);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-financial-maintenance]').textContent.trim()).toBe('15');
+    component.game.demolish(planet, 2);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-financial-maintenance]').textContent.trim()).toBe('0');
+    expect(fixture.nativeElement.querySelector('[data-financial-balance]').textContent.trim()).toBe('+30');
+  });
+
   it('uses shared game time for construction displays through the completion boundary', () => {
     const game = component.game;
     const planet = component.planet();
@@ -136,7 +317,7 @@ describe('PlanetMapComponent', () => {
       .not.toContain('До завершения');
     vi.advanceTimersByTime(2000);
     fixture.detectChanges();
-    expect(component.colony().stocks.minerals).toBe(minerals + 11);
+    expect(component.colony().stocks.minerals).toBe(minerals + 9.2);
   });
 
   it('freezes all construction displays on pause while allowing inspection and navigation', () => {
@@ -585,15 +766,22 @@ describe('PlanetMapComponent', () => {
     vi.advanceTimersByTime(4000);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-resource="energy"]').textContent).toBe(
-      `${10 + power}`,
+      component.resourceNumbers.format(10 + power * 5 / 6),
     );
     component.game.build(component.planet(), BuildingType.Water, 2);
     component.selectTile(2);
     vi.advanceTimersByTime(4000);
+    const save = component.game.createSave(new Date());
+    component.game.restoreSave({
+      ...save,
+      colonies: save.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 9 },
+      })),
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.inspector').textContent).toContain(`+${water}`);
     expect(fixture.nativeElement.querySelector('[data-water-balance]').textContent.trim()).toBe(
-      `+${water} / цикл`,
+      `+${component.resourceNumbers.format(water - 0.4)} / цикл`,
     );
   });
 
@@ -603,6 +791,8 @@ describe('PlanetMapComponent', () => {
     vi.advanceTimersByTime(4000);
     component.game.build(planet, BuildingType.Power, 1);
     vi.advanceTimersByTime(4000);
+    component.game.build(planet, BuildingType.Housing, 4);
+    vi.advanceTimersByTime(6000);
     component.game.build(planet, BuildingType.Minerals, 2);
     component.game.build(planet, BuildingType.Gas, 3);
     component.selectTile(3);
@@ -611,12 +801,19 @@ describe('PlanetMapComponent', () => {
       fixture.nativeElement.querySelector('[data-building-workers]').textContent.trim();
     const employed = () =>
       fixture.nativeElement.querySelector('[data-employed]').textContent.trim();
-    expect(workers()).toBe('0 / 2');
-    expect(employed()).toBe('Работает: 2');
-    vi.advanceTimersByTime(6000);
-    fixture.detectChanges();
-    expect(workers()).toBe('1 / 2');
+    expect(workers()).toBe('0 / 6');
     expect(employed()).toBe('Работает: 5');
+    vi.advanceTimersByTime(6000);
+    const save = component.game.createSave(new Date());
+    component.game.restoreSave({
+      ...save,
+      colonies: save.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, population: 15 },
+      })),
+    });
+    fixture.detectChanges();
+    expect(workers()).toBe('3 / 6');
+    expect(employed()).toBe('Работает: 15');
     expect(
       fixture.nativeElement.querySelector('[data-building-efficiency]').textContent.trim(),
     ).toBe('50%');
@@ -631,8 +828,8 @@ describe('PlanetMapComponent', () => {
     const mine = component.colony().buildings.find((building) => building.tile === 2)!;
     expect(component.game.demolish(planet, mine.id)).toBeNull();
     fixture.detectChanges();
-    expect(workers()).toBe('2 / 2');
-    expect(employed()).toBe('Работает: 4');
+    expect(workers()).toBe('6 / 6');
+    expect(employed()).toBe('Работает: 12');
     expect(
       fixture.nativeElement.querySelector('[data-building-efficiency]').textContent.trim(),
     ).toBe('100%');
@@ -676,13 +873,13 @@ describe('PlanetMapComponent', () => {
     fixture.detectChanges();
     expect(toggle().textContent).toContain('Отключить здание');
     expect(fixture.nativeElement.querySelector('[data-employed]').textContent).toContain(
-      'Работает: 2',
+      'Работает: 5',
     );
     vi.advanceTimersByTime(2000);
-    expect(component.colony().stocks.minerals).toBe(disabled.stocks.minerals + 11);
+    expect(component.colony().stocks.minerals).toBe(disabled.stocks.minerals + 9.2);
   });
 
-  it('shows full water demand while mines are paused and resumes when a station supplies water', () => {
+  it('shows water demand while a staffed mine is stalled and resumes after reallocating workers', () => {
     component.game.build(component.planet(), BuildingType.Base, 0);
     vi.advanceTimersByTime(4000);
     component.game.build(component.planet(), BuildingType.Minerals, 1);
@@ -691,13 +888,13 @@ describe('PlanetMapComponent', () => {
     component.selectTile(1);
     fixture.detectChanges();
     const balance = () => fixture.nativeElement.querySelector('[data-water-balance]');
-    expect(balance().textContent.trim()).toBe('-2 / цикл');
+    expect(balance().textContent.trim()).toBe('-1 / цикл');
     expect(balance().classList.contains('water-deficit')).toBe(true);
     expect(fixture.nativeElement.querySelector('.inspector').textContent).toContain('Вода / 2 с');
-    vi.advanceTimersByTime(140000);
+    vi.advanceTimersByTime(260000);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-resource="water"]').textContent).toBe('0');
-    expect(balance().textContent.trim()).toBe('-2 / цикл');
+    expect(balance().textContent.trim()).toBe('-1 / цикл');
     expect(fixture.nativeElement.querySelector('.inspector').textContent).toContain(
       'Недостаточно воды',
     );
@@ -706,14 +903,16 @@ describe('PlanetMapComponent', () => {
       .colony()
       .buildings.find((building) => building.type === BuildingType.Gas)!;
     expect(component.game.demolish(component.planet(), gasMine.id)).toBeNull();
-    component.game.build(component.planet(), BuildingType.Power, 3);
-    vi.advanceTimersByTime(4000);
+    const mine = component.colony().buildings.find((building) => building.type === BuildingType.Minerals)!;
+    expect(component.game.demolish(component.planet(), mine.id)).toBeNull();
     component.game.build(component.planet(), BuildingType.Water, 4);
     vi.advanceTimersByTime(6000);
+    expect(component.game.build(component.planet(), BuildingType.Minerals, 1)).toBeNull();
+    vi.advanceTimersByTime(8000);
     fixture.detectChanges();
     expect(balance().textContent.trim()).toBe('+11 / цикл');
     expect(balance().classList.contains('water-deficit')).toBe(false);
-    expect(fixture.nativeElement.querySelector('[data-resource="water"]').textContent).toBe('11');
+    expect(component.colony().stocks.water).toBeGreaterThan(0);
     expect(fixture.nativeElement.querySelector('.inspector').textContent).toContain('Работает');
     expect(fixture.nativeElement.querySelector('[role="status"]').textContent).not.toContain(
       'население убывает',
@@ -721,34 +920,38 @@ describe('PlanetMapComponent', () => {
   });
 
   it('renders farm artwork and food colors through surplus, near balance, deficit, and famine', () => {
+    const save = component.game.createSave(new Date());
+    component.game.restoreSave({
+      ...save,
+      colonies: save.colonies.map((colony) => ({
+        ...colony, stocks: { ...colony.stocks, minerals: 1000 },
+      })),
+    });
     component.game.build(component.planet(), BuildingType.Base, 0);
     vi.advanceTimersByTime(4000);
     component.game.build(component.planet(), BuildingType.Power, 1);
     component.game.build(component.planet(), BuildingType.Water, 2);
     component.game.build(component.planet(), BuildingType.Farm, 3);
     vi.advanceTimersByTime(6000);
+    component.game.build(component.planet(), BuildingType.Housing, 6);
+    vi.advanceTimersByTime(26000);
     component.selectTile(3);
     fixture.detectChanges();
     const indicator = () => fixture.nativeElement.querySelector('.food');
     const balance = () =>
       fixture.nativeElement.querySelector('[data-food-balance]').textContent.trim();
     expect(indicator().classList.contains('food-surplus')).toBe(true);
-    expect(balance()).toBe('+4 / цикл');
+    expect(balance()).toBe('+2 / цикл');
     expect(fixture.nativeElement.querySelector('[data-tile="3"] image').getAttribute('href')).toBe(
       'assets/buildings/Farm.png',
     );
     expect(fixture.nativeElement.querySelector('.inspector img').getAttribute('src')).toBe(
       'assets/buildings/Farm.png',
     );
-    component.game.build(component.planet(), BuildingType.Housing, 6);
-    vi.advanceTimersByTime(10000);
-    component.game.build(component.planet(), BuildingType.Minerals, 4);
-    vi.advanceTimersByTime(12000);
     component.game.build(component.planet(), BuildingType.Power, 5);
     vi.advanceTimersByTime(4000);
-    vi.advanceTimersByTime(2000);
     component.game.build(component.planet(), BuildingType.Housing, 7);
-    vi.advanceTimersByTime(14000);
+    vi.advanceTimersByTime(12000);
     fixture.detectChanges();
     expect(component.colony().stocks.population).toBe(23);
     expect(indicator().classList.contains('food-surplus')).toBe(true);

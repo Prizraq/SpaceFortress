@@ -9,6 +9,7 @@ export interface BuildingDefinition extends IBuilding {
   readonly type: BuildingType;
   readonly code: string;
   readonly costCredits: number;
+  readonly maintenancePerMinute: number;
   readonly costEnergy: number;
   readonly energyGain: number;
   readonly populationGain: number;

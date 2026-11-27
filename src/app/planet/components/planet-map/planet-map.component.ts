@@ -10,15 +10,19 @@ import {
   output,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
-import { foodEconomy, waterEconomy } from '../../domain/colony-simulation';
-import { colonyWorkforce } from '../../domain/colony-workforce';
+import * as ColonySimulation from '../../domain/colony-simulation';
+import * as ColonyWorkforce from '../../domain/colony-workforce';
 import { BuildingType } from '../../models/enum/building-type';
 import { BuildingDefinition } from '../../models/interface/building-definition';
 import { PlacedBuilding } from '../../models/interface/placed-building';
 import { Planet } from '../../../shared/models/interface/planet';
 import { GameSessionService } from '../../../game-session/services/game-session.service';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon.component';
+import { FinancialSummaryComponent } from '../../../game-session/components/financial-summary/financial-summary.component';
+import { formatCredits } from '../../../game-session/components/financial-summary/format-credits';
+import * as ColonyFinance from '../../domain/colony-finances';
 import {
   BUILD_ERROR_LABELS,
   BUILDING_OPERATION_ERROR_LABELS,
@@ -30,11 +34,15 @@ import { createSurfaceTexture } from './surface-texture';
 
 const HORIZON_CURVE = 12;
 const SKY_HEIGHT = 24;
+const MIN_PANEL_WIDTH = 200;
+const MAX_PANEL_WIDTH = 480;
+type SidePanel = 'catalogue' | 'inspector';
+type InspectorTab = 'overview' | 'building' | 'finances';
 
 @Component({
   selector: 'app-planet-map',
   standalone: true,
-  imports: [GameIconComponent],
+  imports: [GameIconComponent, FinancialSummaryComponent],
   templateUrl: './planet-map.component.html',
   styleUrls: ['./planet-map.component.scss'],
 })
@@ -46,14 +54,17 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
   readonly game = inject(GameSessionService);
   readonly catalogue: readonly BuildingDefinition[] = this.game.catalogue;
   readonly colony = computed(() => this.game.colonies()[this.planet().id]);
-  readonly water = computed(() => waterEconomy(this.colony()));
-  readonly food = computed(() => foodEconomy(this.colony()));
-  readonly workforce = computed(() => colonyWorkforce(this.colony()));
+  readonly water = computed(() => ColonySimulation.waterEconomy(this.colony()));
+  readonly food = computed(() => ColonySimulation.foodEconomy(this.colony()));
+  readonly workforce = computed(() => ColonyWorkforce.colonyWorkforce(this.colony()));
   readonly foodLevel = computed(() => {
     const balance = this.food().balance;
     return balance < 0 ? 'deficit' : balance <= 0.2 ? 'balanced' : 'surplus';
   });
   readonly resourceNumbers = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+  readonly creditText = computed(() => formatCredits(this.game.wholeCredits(), this.game.creditRemainder()));
+  readonly maintenancePerMinute = ColonyFinance.maintenancePerMinute;
+  readonly buildingMaintenancePerMinute = ColonyFinance.buildingMaintenancePerMinute;
   readonly side = computed(() => this.game.gridSize(this.planet().radius));
   readonly blueprint = signal<BuildingType | null>(null);
   readonly dragging = signal<BuildingType | null>(null);
@@ -74,8 +85,25 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
   readonly zoom = signal(1.5);
   readonly mapOffset = signal({ x: 0, y: 0 });
   readonly panning = signal(false);
+  readonly tabs: readonly { id: InspectorTab; label: string }[] = [
+    { id: 'overview', label: 'Планета' },
+    { id: 'building', label: 'Здание' },
+    { id: 'finances', label: 'Финансы' },
+  ];
+  readonly activeTab = signal<InspectorTab>('overview');
+  readonly panelWidths = signal({ catalogue: 264, inspector: 320 });
+  readonly minimumPanelWidth = MIN_PANEL_WIDTH;
+  readonly maximumPanelWidth = signal(MAX_PANEL_WIDTH);
+  private readonly workspace = viewChild.required<ElementRef<HTMLDivElement>>('workspace');
+  private readonly tabButtons = viewChildren<ElementRef<HTMLButtonElement>>('panelTab');
   private readonly viewport = viewChild.required<ElementRef<HTMLDivElement>>('mapViewport');
   private resizeObserver?: ResizeObserver;
+  private panelGesture: {
+    panel: SidePanel;
+    pointerId: number;
+    startX: number;
+    width: number;
+  } | null = null;
   private panGesture: {
     pointerId: number;
     startX: number;
@@ -121,8 +149,19 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
 
   ngAfterViewInit(): void {
     const viewport = this.viewport().nativeElement;
-    this.resizeObserver = new ResizeObserver(() => this.fitMap(viewport));
+    this.resizeObserver = new ResizeObserver(() => {
+      const width = this.workspace().nativeElement.getBoundingClientRect().width;
+      if (width > 900) {
+        this.maximumPanelWidth.set(Math.min(MAX_PANEL_WIDTH, Math.floor(width * 0.35)));
+        this.panelWidths.update((widths) => ({
+          catalogue: this.clampPanelWidth(widths.catalogue),
+          inspector: this.clampPanelWidth(widths.inspector),
+        }));
+      }
+      this.fitMap(viewport);
+    });
     this.resizeObserver.observe(viewport);
+    this.resizeObserver.observe(this.workspace().nativeElement);
   }
 
   ngOnDestroy(): void {
@@ -134,11 +173,13 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.blueprint.set(null);
     this.dragEnd();
     this.selectedTile.set(null);
+    this.activeTab.set('overview');
     this.demolitionTarget.set(null);
     this.message.set('');
     this.zoom.set(1.5);
     this.mapOffset.set({ x: 0, y: 0 });
     this.panGesture = null;
+    this.panelGesture = null;
     this.panning.set(false);
     this.suppressMapClick = false;
     if (this.resizeObserver) this.fitMap(this.viewport().nativeElement);
@@ -163,10 +204,65 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
       return;
     }
     this.selectedTile.set(tile);
+    this.activeTab.set('building');
     this.demolitionTarget.set(null);
     this.message.set('');
     const type = this.blueprint();
     if (type && !this.tileBuildings().has(tile)) this.place(type, tile);
+  }
+
+  navigateTabs(event: KeyboardEvent, index: number): void {
+    let next: number;
+    if (event.key === 'ArrowRight') next = (index + 1) % this.tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index + this.tabs.length - 1) % this.tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = this.tabs.length - 1;
+    else return;
+    event.preventDefault();
+    this.activeTab.set(this.tabs[next].id);
+    this.tabButtons()[next].nativeElement.focus();
+  }
+
+  startPanelResize(event: PointerEvent, panel: SidePanel): void {
+    if (event.button !== 0 || !event.isPrimary) return;
+    event.preventDefault();
+    const handle = event.currentTarget as HTMLElement;
+    handle.focus();
+    handle.setPointerCapture(event.pointerId);
+    this.panelGesture = {
+      panel,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      width: this.clampPanelWidth(this.panelWidths()[panel]),
+    };
+  }
+
+  movePanelResize(event: PointerEvent): void {
+    const gesture = this.panelGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const delta = (event.clientX - gesture.startX) * (gesture.panel === 'catalogue' ? 1 : -1);
+    this.setPanelWidth(gesture.panel, gesture.width + delta);
+  }
+
+  endPanelResize(event: PointerEvent): void {
+    if (this.panelGesture?.pointerId !== event.pointerId) return;
+    this.panelGesture = null;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  }
+
+  resizePanelWithKeyboard(event: KeyboardEvent, panel: SidePanel): void {
+    const direction = panel === 'catalogue' ? 1 : -1;
+    let width: number;
+    if (event.key === 'ArrowLeft')
+      width = this.clampPanelWidth(this.panelWidths()[panel]) - 16 * direction;
+    else if (event.key === 'ArrowRight')
+      width = this.clampPanelWidth(this.panelWidths()[panel]) + 16 * direction;
+    else if (event.key === 'Home') width = MIN_PANEL_WIDTH;
+    else if (event.key === 'End') width = this.maximumPanelWidth();
+    else return;
+    event.preventDefault();
+    this.setPanelWidth(panel, width);
   }
 
   dragStart(event: DragEvent, definition: BuildingDefinition): void {
@@ -198,6 +294,18 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
       definition.availableYield(this.planet(), this.colony().deposits),
       definition.yieldFor(this.planet()) * this.workforce().efficiency(building),
     );
+  }
+
+  paidBuildings(type: BuildingType): number {
+    return this.colony().buildings.filter((building) =>
+      building.type === type && ColonyFinance.buildingMaintenancePerMinute(building) > 0,
+    ).length;
+  }
+
+  financiallyDisabledBuildings(type: BuildingType): number {
+    return this.colony().buildings.filter((building) =>
+      building.type === type && building.disabledByFinance,
+    ).length;
   }
 
   requestDemolition(): void {
@@ -252,6 +360,7 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
     if (definition) {
       this.demolitionTarget.set(null);
       this.selectedTile.set(tile);
+      this.activeTab.set('building');
       this.place(definition.type, tile);
     }
   }
@@ -384,8 +493,17 @@ export class PlanetMapComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   private place(type: BuildingType, tile: number): void {
+    this.activeTab.set('building');
     const problem = this.game.build(this.planet(), type, tile);
     this.message.set(problem ? BUILD_ERROR_LABELS[problem] : 'Строительство начато');
     if (!problem) this.blueprint.set(null);
+  }
+
+  private clampPanelWidth(width: number): number {
+    return Math.max(MIN_PANEL_WIDTH, Math.min(this.maximumPanelWidth(), width));
+  }
+
+  private setPanelWidth(panel: SidePanel, width: number): void {
+    this.panelWidths.update((widths) => ({ ...widths, [panel]: this.clampPanelWidth(width) }));
   }
 }

@@ -1,6 +1,7 @@
 import { Grid, defineHex, rectangle } from 'honeycomb-grid';
 
-const Hex = defineHex({ dimensions: 30, origin: 'topLeft' });
+export const HEX_RADIUS = 30;
+const Hex = defineHex({ dimensions: HEX_RADIUS, origin: 'topLeft' });
 export const MAP_VERTICAL_SCALE = 0.75;
 
 export function createHexMap(side: number) {

@@ -15,5 +15,5 @@ export class WaterStation extends Building {
   readonly buildTime = 4;
   override readonly production = ProducedResource.Water;
   override readonly productionAmount = 12;
-  override readonly workersRequired = 1;
+  override readonly workersRequired = 3;
 }
